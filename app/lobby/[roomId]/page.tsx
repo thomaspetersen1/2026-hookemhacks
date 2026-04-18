@@ -29,6 +29,7 @@ export default function LobbyPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [localReady, setLocalReady] = useState(false);
 
   // Fetch room by code; idempotently ensure membership in room_players.
   useEffect(() => {
@@ -153,6 +154,8 @@ export default function LobbyPage() {
               const isSelf = p.playerId === playerId;
               const isRoomHost = room?.host_id === p.playerId;
               const displayName = isSelf ? "You" : (p.name || p.playerId);
+              const presenceReady = Boolean(p.ready);
+              const rowReady = isSelf ? localReady || presenceReady : presenceReady;
               return (
                 <div
                   key={p.playerId}
@@ -167,8 +170,8 @@ export default function LobbyPage() {
                       {isRoomHost && <span className="host-badge mono">HOST</span>}
                     </div>
                     <div className="player-meta mono">
-                      <span className={`ready-dot ${p.ready ? "" : "waiting"}`} />
-                      {p.ready ? "Calibrated & ready" : "Calibrating…"}
+                      <span className={`ready-dot ${rowReady ? "" : "waiting"}`} />
+                      {rowReady ? "Calibrated & ready" : "Calibrating…"}
                     </div>
                   </div>
                   <div className="player-meta mono">P{i + 1}</div>
@@ -230,7 +233,14 @@ export default function LobbyPage() {
 
         {/* ── Right: calibration ── */}
         <div className="lobby-cal card">
-          <CalibrationPanel onReady={() => setReady(true)} />
+          <BodyDetector>
+            <CalibrationPanel
+              onReady={() => {
+                setLocalReady(true);
+                void setReady(true);
+              }}
+            />
+          </BodyDetector>
         </div>
       </div>
 

@@ -118,7 +118,7 @@ export function useGameChannel({
   );
 
   const setReady = useCallback((ready: boolean) => {
-    channelRef.current?.setReady(ready);
+    void channelRef.current?.setReady(ready);
   }, []);
 
   return {

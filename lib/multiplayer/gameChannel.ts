@@ -21,12 +21,15 @@ export class GameChannel {
   private readonly roomId: string;
   private readonly playerId: string;
   private readonly playerName: string;
+  /** Stable join time for this tab — avoids churning presence sort order on every ready toggle. */
+  private readonly onlineAt: string;
   private ready = false;
 
   constructor(roomId: string, playerId: string, playerName: string) {
     this.roomId = roomId;
     this.playerId = playerId;
     this.playerName = playerName;
+    this.onlineAt = new Date().toISOString();
     this.channel = supabase.channel(`room:${roomId}`, {
       config: {
         broadcast: { self: false, ack: false }, // ack:false = fire-and-forget for lowest latency
@@ -39,7 +42,7 @@ export class GameChannel {
     return this.channel.track({
       playerId: this.playerId,
       name: this.playerName,
-      onlineAt: new Date().toISOString(),
+      onlineAt: this.onlineAt,
       ready: this.ready,
     });
   }
@@ -106,10 +109,7 @@ export class GameChannel {
         for (const entries of Object.values(state)) {
           if (entries.length === 0) continue;
           // Multiple entries under one key = same player across multiple
-          // connections (dev remounts, reconnects, or same-machine tabs
-          // sharing a playerId). Collapse them: the player is "ready" if any
-          // of their connections reports ready, and we keep the freshest
-          // onlineAt / name for display.
+          // connections. The player is "ready" if any connection reports ready.
           const anyReady = entries.some((e) => !!e.ready);
           const latest = entries.reduce((a, b) =>
             new Date(a.onlineAt).getTime() >= new Date(b.onlineAt).getTime() ? a : b,
@@ -128,6 +128,7 @@ export class GameChannel {
     return new Promise((resolve, reject) => {
       this.channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
+          this.ready = false;
           await this.trackPresence();
           resolve();
         } else if (status === "CHANNEL_ERROR") {
