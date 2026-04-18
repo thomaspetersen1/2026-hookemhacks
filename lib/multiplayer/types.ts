@@ -22,6 +22,7 @@ export interface PlayerPresence {
   playerId: string;
   name: string;
   onlineAt: string;
+  ready: boolean;
 }
 
 export interface PlayerState {

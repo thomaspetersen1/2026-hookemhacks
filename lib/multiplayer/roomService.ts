@@ -99,6 +99,18 @@ export async function startGame(roomId: string, hostId: string): Promise<void> {
   if (error) throw error;
 }
 
+// End an active match and return all players to the lobby. Does not remove
+// anyone from room_players; the room just reverts to 'waiting' status.
+export async function endMatch(roomId: string): Promise<void> {
+  const { error } = await supabase
+    .from("rooms")
+    .update({ status: "waiting" })
+    .eq("id", roomId)
+    .eq("status", "active");
+
+  if (error) throw error;
+}
+
 export async function getRoomByCode(code: string): Promise<Room | null> {
   const { data, error } = await supabase
     .from("rooms")
