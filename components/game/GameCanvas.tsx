@@ -10,12 +10,14 @@ import { PLAYER_SLOTS } from "@/lib/game/sportLayout";
 
 interface GameCanvasProps {
   debug?: boolean;
+  /** Show XYZ axis gizmos at every bone pivot on each avatar. */
+  debugRig?: boolean;
 }
 
 // R3F scene root. Owns camera, lighting rig, and mounts the World + Avatars.
 // Kept purely presentational — all state lives in Zustand.
 
-export function GameCanvas({ debug = false }: GameCanvasProps) {
+export function GameCanvas({ debug = false, debugRig = false }: GameCanvasProps) {
   const sport = useGameStore((s) => s.sport);
   const players = useGameStore((s) => s.players);
   const slots = PLAYER_SLOTS[sport];
@@ -42,6 +44,7 @@ export function GameCanvas({ debug = false }: GameCanvasProps) {
               playerId={p.id}
               position={slot.position}
               rotationY={slot.rotationY}
+              debugRig={debugRig}
             />
           );
         })}

@@ -59,13 +59,28 @@ export function armStateToRigRotations(
   //
   // LowerArm.x: elbow bend; -(180° − elbowAngle) in radians so a straight
   // arm is 0 and fully bent is -π.
+  // Third-person convention: user and avatar face the same direction (into
+  // the scene). The sword slot gives the local player's avatar rotationY=π
+  // so it faces away from the camera alongside the user. In that setup
+  // user-forward (reach toward camera, +Z world) should become avatar-
+  // forward (reach into scene, −Z world = avatar-local +Z after the slot's
+  // rotationY=π flip) — which is produced by a NEGATIVE UpperArm.x.
+  //
+  // If a slot is ever configured to face the camera (mirror mode), flip
+  // the sign on these two lines.
+  // Elbow sign flips once the upper arm crosses horizontal: after
+  // sideRaiseAngle passes ±π/2, the upper arm's local X axis has rotated
+  // into the opposite world direction, so a constant-sign bend inverts.
+  // Flipping the sign above that threshold keeps the forearm bending the
+  // natural way in both below- and above-T-pose regimes.
   if (left) {
     pose.LeftUpperArm = {
       x: -left.forwardAngle,
       y: 0,
       z: left.sideRaiseAngle,
     };
-    pose.LeftLowerArm = { x: -toRad(180 - left.elbowAngle), y: 0, z: 0 };
+    const leftElbowSign = Math.abs(left.sideRaiseAngle) > Math.PI / 2 ? 1 : -1;
+    pose.LeftLowerArm = { x: leftElbowSign * toRad(180 - left.elbowAngle), y: 0, z: 0 };
   }
   if (right) {
     pose.RightUpperArm = {
@@ -73,7 +88,8 @@ export function armStateToRigRotations(
       y: 0,
       z: right.sideRaiseAngle,
     };
-    pose.RightLowerArm = { x: -toRad(180 - right.elbowAngle), y: 0, z: 0 };
+    const rightElbowSign = Math.abs(right.sideRaiseAngle) > Math.PI / 2 ? 1 : -1;
+    pose.RightLowerArm = { x: rightElbowSign * toRad(180 - right.elbowAngle), y: 0, z: 0 };
   }
 
   return { pose };

@@ -21,6 +21,19 @@ interface AvatarProps {
   playerId: PlayerId;
   position?: [number, number, number];
   rotationY?: number;
+  /**
+   * Show a small XYZ axes gizmo at every major bone pivot. Red = local X,
+   * green = local Y, blue = local Z. Useful for debugging CV → rig rotation
+   * mappings — watch the gizmos rotate and compare to the incoming numbers
+   * on /cv-debug.
+   */
+  debugRig?: boolean;
+}
+
+// Renders drei/three AxesHelper attached to a bone group. Size is small so
+// multiple stacked joints remain legible.
+function BoneAxes({ size = 0.12 }: { size?: number }) {
+  return <axesHelper args={[size]} />;
 }
 
 // --- Rig proportions (meters) ---------------------------------------------
@@ -63,6 +76,7 @@ export function Avatar({
   playerId,
   position = [0, 0, 0],
   rotationY = 0,
+  debugRig = false,
 }: AvatarProps) {
   const root = useRef<Group>(null);
   const bones = useRef<AvatarBones>({});
@@ -142,6 +156,7 @@ export function Avatar({
     <group ref={root} position={position} rotation={[0, rotationY, 0]}>
       {/* Root transform → Hips pivot */}
       <group ref={bind("Hips")} position={[0, HIPS_Y, 0]}>
+        {debugRig && <BoneAxes size={0.18} />}
         {/* Pelvis visual (centered on hips) */}
         <mesh castShadow>
           <boxGeometry args={[TORSO_W * 0.9, 0.2, TORSO_D]} />
@@ -150,12 +165,14 @@ export function Avatar({
 
         {/* Spine chain: Hips → Spine → Chest → Neck → Head */}
         <group ref={bind("Spine")} position={[0, 0.1, 0]}>
+          {debugRig && <BoneAxes size={0.15} />}
           <mesh position={[0, SPINE_LEN / 2, 0]} castShadow>
             <boxGeometry args={[TORSO_W * 0.82, SPINE_LEN, TORSO_D * 0.9]} />
             <meshStandardMaterial color={tint} roughness={0.55} />
           </mesh>
 
           <group ref={bind("Chest")} position={[0, SPINE_LEN, 0]}>
+            {debugRig && <BoneAxes size={0.15} />}
             <mesh position={[0, CHEST_LEN / 2, 0]} castShadow>
               <boxGeometry args={[TORSO_W, CHEST_LEN, TORSO_D]} />
               <meshStandardMaterial color={tint} roughness={0.5} />
@@ -163,12 +180,14 @@ export function Avatar({
 
             {/* Neck + head */}
             <group ref={bind("Neck")} position={[0, CHEST_LEN, 0]}>
+              {debugRig && <BoneAxes size={0.1} />}
               <mesh position={[0, NECK_LEN / 2, 0]} castShadow>
                 <cylinderGeometry args={[0.07, 0.08, NECK_LEN, 12]} />
                 <meshStandardMaterial color={tint} roughness={0.5} />
               </mesh>
 
               <group ref={bind("Head")} position={[0, NECK_LEN, 0]}>
+                {debugRig && <BoneAxes size={0.14} />}
                 <mesh position={[0, HEAD_LEN / 2 - 0.02, 0]} castShadow>
                   <sphereGeometry args={[HEAD_R, 20, 20]} />
                   <meshStandardMaterial
@@ -192,7 +211,9 @@ export function Avatar({
               ref={bind("LeftShoulder")}
               position={[-SHOULDER_OFFSET_X, CHEST_LEN * 0.85, 0]}
             >
+              {debugRig && <BoneAxes size={0.12} />}
               <group ref={bind("LeftUpperArm")}>
+                {debugRig && <BoneAxes size={0.18} />}
                 <mesh position={[0, -UPPER_ARM_LEN / 2, 0]} castShadow>
                   <boxGeometry args={[LIMB_W, UPPER_ARM_LEN, LIMB_W]} />
                   <meshStandardMaterial color={tint} roughness={0.5} />
@@ -201,6 +222,7 @@ export function Avatar({
                   ref={bind("LeftLowerArm")}
                   position={[0, -UPPER_ARM_LEN, 0]}
                 >
+                  {debugRig && <BoneAxes size={0.14} />}
                   <mesh position={[0, -LOWER_ARM_LEN / 2, 0]} castShadow>
                     <boxGeometry
                       args={[LIMB_W * 0.85, LOWER_ARM_LEN, LIMB_W * 0.85]}
@@ -211,6 +233,7 @@ export function Avatar({
                     ref={bind("LeftHand")}
                     position={[0, -LOWER_ARM_LEN, 0]}
                   >
+                    {debugRig && <BoneAxes size={0.1} />}
                     {/* palm */}
                     <mesh position={[0, -HAND_LEN / 2, 0]} castShadow>
                       <boxGeometry args={[LIMB_W, HAND_LEN, LIMB_W * 0.6]} />
@@ -263,7 +286,9 @@ export function Avatar({
               ref={bind("RightShoulder")}
               position={[SHOULDER_OFFSET_X, CHEST_LEN * 0.85, 0]}
             >
+              {debugRig && <BoneAxes size={0.12} />}
               <group ref={bind("RightUpperArm")}>
+                {debugRig && <BoneAxes size={0.18} />}
                 <mesh position={[0, -UPPER_ARM_LEN / 2, 0]} castShadow>
                   <boxGeometry args={[LIMB_W, UPPER_ARM_LEN, LIMB_W]} />
                   <meshStandardMaterial color={tint} roughness={0.5} />
@@ -272,6 +297,7 @@ export function Avatar({
                   ref={bind("RightLowerArm")}
                   position={[0, -UPPER_ARM_LEN, 0]}
                 >
+                  {debugRig && <BoneAxes size={0.14} />}
                   <mesh position={[0, -LOWER_ARM_LEN / 2, 0]} castShadow>
                     <boxGeometry
                       args={[LIMB_W * 0.85, LOWER_ARM_LEN, LIMB_W * 0.85]}
@@ -282,6 +308,7 @@ export function Avatar({
                     ref={bind("RightHand")}
                     position={[0, -LOWER_ARM_LEN, 0]}
                   >
+                    {debugRig && <BoneAxes size={0.1} />}
                     <mesh position={[0, -HAND_LEN / 2, 0]} castShadow>
                       <boxGeometry args={[LIMB_W, HAND_LEN, LIMB_W * 0.6]} />
                       <meshStandardMaterial color={SKIN_COLOR} roughness={0.6} />
@@ -330,11 +357,13 @@ export function Avatar({
 
         {/* --- Legs (siblings of Spine, children of Hips) -------------- */}
         <group ref={bind("LeftUpperLeg")} position={[-HIP_OFFSET_X, 0, 0]}>
+          {debugRig && <BoneAxes size={0.16} />}
           <mesh position={[0, -UPPER_LEG_LEN / 2, 0]} castShadow>
             <boxGeometry args={[LIMB_W * 1.2, UPPER_LEG_LEN, LIMB_W * 1.2]} />
             <meshStandardMaterial color="#1f2937" roughness={0.6} />
           </mesh>
           <group ref={bind("LeftLowerLeg")} position={[0, -UPPER_LEG_LEN, 0]}>
+            {debugRig && <BoneAxes size={0.14} />}
             <mesh position={[0, -LOWER_LEG_LEN / 2, 0]} castShadow>
               <boxGeometry args={[LIMB_W * 1.0, LOWER_LEG_LEN, LIMB_W * 1.0]} />
               <meshStandardMaterial color="#1f2937" roughness={0.6} />
@@ -349,11 +378,13 @@ export function Avatar({
         </group>
 
         <group ref={bind("RightUpperLeg")} position={[HIP_OFFSET_X, 0, 0]}>
+          {debugRig && <BoneAxes size={0.16} />}
           <mesh position={[0, -UPPER_LEG_LEN / 2, 0]} castShadow>
             <boxGeometry args={[LIMB_W * 1.2, UPPER_LEG_LEN, LIMB_W * 1.2]} />
             <meshStandardMaterial color="#1f2937" roughness={0.6} />
           </mesh>
           <group ref={bind("RightLowerLeg")} position={[0, -UPPER_LEG_LEN, 0]}>
+            {debugRig && <BoneAxes size={0.14} />}
             <mesh position={[0, -LOWER_LEG_LEN / 2, 0]} castShadow>
               <boxGeometry args={[LIMB_W * 1.0, LOWER_LEG_LEN, LIMB_W * 1.0]} />
               <meshStandardMaterial color="#1f2937" roughness={0.6} />

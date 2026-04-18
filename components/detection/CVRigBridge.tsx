@@ -33,6 +33,10 @@ export function CVRigBridge({ playerId }: { playerId: PlayerId }) {
   useEffect(() => {
     if (!isReady) return;
 
+    // Direct pass-through: ArmState.leftArm → avatar's LeftUpperArm.
+    // Turns out teammate's useBodyDetection names the fields from the
+    // user's perspective already (not mirrored), so same-side is the
+    // natural mapping for third-person (user and avatar face same way).
     const armRig = armStateToRigRotations(leftArm, rightArm);
     const leftFingers = handLandmarksToFingerRig("Left", leftHandLandmarks);
     const rightFingers = handLandmarksToFingerRig("Right", rightHandLandmarks);

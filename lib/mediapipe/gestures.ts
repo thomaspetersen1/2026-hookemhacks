@@ -56,6 +56,11 @@ export function calcRaisedHeight(wrist: Vec3, shoulder: Vec3): number {
 export function calcForwardAngle(wrist: Vec3, shoulder: Vec3): number {
   const dy = wrist.y - shoulder.y; // positive when wrist below shoulder
   const dz = wrist.z - shoulder.z; // negative when wrist forward of shoulder
+  // Wrist clearly above shoulder — the sagittal "forward from hanging"
+  // axis collapses and z noise gets amplified by the tiny-dy denominator,
+  // so the arm would spuriously fire forwardAngle ≈ ±π/2 and point at the
+  // camera instead of going up. Let sideRaiseAngle own this regime.
+  if (dy < -0.05) return 0;
   return Math.atan2(-dz, Math.max(dy, 1e-4));
 }
 
@@ -79,6 +84,12 @@ export function calcForwardAngle(wrist: Vec3, shoulder: Vec3): number {
 export function calcSideRaiseAngle(wrist: Vec3, shoulder: Vec3): number {
   const dx = wrist.x - shoulder.x; // signed
   const dy = wrist.y - shoulder.y; // positive below, negative above
+  // When the arm is pointed at the camera, dx/dy both collapse and this
+  // angle becomes noisy garbage. Short-circuit to 0 (arm straight, no side
+  // raise) so the forward-reach rotation isn't compounded with phantom
+  // sideways tilt. Matches the elbow foreshortening threshold.
+  const span2D = Math.hypot(dx, dy);
+  if (span2D < 0.06) return 0;
   return Math.atan2(dx, dy);
 }
 

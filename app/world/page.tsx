@@ -36,9 +36,9 @@ export default function WorldPage() {
     <BodyDetector debug={debug}>
       <CVRigBridge playerId={SELF_PLAYER_ID} />
       <div className="relative h-screen w-screen overflow-hidden bg-black">
-        <GameCanvas debug={false /* R3F stats off even in CV debug mode */} />
+        <GameCanvas debug={false} debugRig />
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-500">
-          world · CV driven {debug ? "· feed bottom-right" : ""}
+          world · CV driven · rig axes on{debug ? " · feed bottom-right" : ""}
         </div>
       </div>
     </BodyDetector>
