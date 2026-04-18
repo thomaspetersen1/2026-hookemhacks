@@ -166,6 +166,22 @@ export interface ArmState {
 export interface HandState {
   gesture: GestureLabel;
   pinchDistance: number;
+  fistSize?: number;
+  isPunching?: boolean;
+}
+
+export type PunchHand = "left" | "right";
+
+export interface PunchEvent {
+  hand: PunchHand;
+  enlargementRatio: number;
+  timeToEnlargement: number;
+  timestampMs: number;
+}
+
+export interface FistCalibration {
+  baselineFistSize: number;
+  sampleCount: number;
 }
 
 export interface BodyTrackingState {
@@ -181,6 +197,7 @@ export interface BodyTrackingState {
    */
   leftHandLandmarks: PoseLandmark[] | null;
   rightHandLandmarks: PoseLandmark[] | null;
+  punchEvents: PunchEvent[];
   fps: number;
   isReady: boolean;
 }
@@ -189,6 +206,7 @@ export interface Move {
   swingSpeed: number;
   raisedHeight: number;
   timestamp: number;
+  punchEvent?: PunchEvent;
 }
 
 export interface SessionRecord {

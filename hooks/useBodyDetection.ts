@@ -2,8 +2,8 @@
 
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { initPose, processFrame, type RawPoseResult } from "@/lib/mediapipe/pose";
-import { buildArmState, buildHandState } from "@/lib/mediapipe/gestures";
-import type { BodyTrackingState, ArmState } from "@/types";
+import { buildArmState, buildHandState, detectPunchEvent, type PunchDetectorState } from "@/lib/mediapipe/gestures";
+import type { BodyTrackingState, ArmState, PunchEvent, FistCalibration } from "@/types";
 import type { NormalizedLandmark } from "@mediapipe/tasks-vision";
 
 const POSE = { LEFT_SHOULDER: 11, RIGHT_SHOULDER: 12, LEFT_ELBOW: 13, RIGHT_ELBOW: 14, LEFT_WRIST: 15, RIGHT_WRIST: 16 };
@@ -76,6 +76,9 @@ function drawDebugCanvas(
 type BodyTrackingContextValue = BodyTrackingState & {
   videoRef: React.RefObject<HTMLVideoElement | null> | null;
   overlayCanvasRef: React.RefObject<HTMLCanvasElement | null> | null;
+  startFistCalibration: () => void;
+  fistCalibration: { left: FistCalibration | null; right: FistCalibration | null };
+  isFistCalibrating: boolean;
 };
 
 const defaultState: BodyTrackingContextValue = {
@@ -85,10 +88,14 @@ const defaultState: BodyTrackingContextValue = {
   rightHand: null,
   leftHandLandmarks: null,
   rightHandLandmarks: null,
+  punchEvents: [],
   fps: 0,
   isReady: false,
   videoRef: null,
   overlayCanvasRef: null,
+  startFistCalibration: () => {},
+  fistCalibration: { left: null, right: null },
+  isFistCalibrating: false,
 };
 
 export const BodyTrackingContext = createContext<BodyTrackingContextValue>(defaultState);
@@ -108,6 +115,19 @@ export function useBodyDetectionProvider(
   const prevTimeRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const fpsRef = useRef<{ count: number; lastTime: number }>({ count: 0, lastTime: 0 });
+
+  const fistCalibrationRef = useRef<{ left: FistCalibration | null; right: FistCalibration | null }>({ left: null, right: null });
+  const punchStateRef = useRef<{ left: PunchDetectorState; right: PunchDetectorState }>({
+    left: { isPunching: false, punchStartTime: 0 },
+    right: { isPunching: false, punchStartTime: 0 },
+  });
+  const fistCalAccRef = useRef({ active: false, startTime: 0, leftSamples: [] as number[], rightSamples: [] as number[] });
+  const [isFistCalibrating, setIsFistCalibrating] = useState(false);
+
+  const startFistCalibration = useCallback(() => {
+    fistCalAccRef.current = { active: true, startTime: performance.now(), leftSamples: [], rightSamples: [] };
+    setIsFistCalibrating(true);
+  }, []);
 
   const loop = useCallback((timestamp: number) => {
     const video = videoRef.current;
@@ -151,13 +171,47 @@ export function useBodyDetectionProvider(
     const fps = elapsed > 500 ? Math.round((fpsRef.current.count / elapsed) * 1000) : undefined;
     if (fps !== undefined) fpsRef.current = { count: 0, lastTime: timestamp };
 
+    const leftHandRaw = raw.leftHandLandmarks ? buildHandState(raw.leftHandLandmarks) : null;
+    const rightHandRaw = raw.rightHandLandmarks ? buildHandState(raw.rightHandLandmarks) : null;
+
+    const acc = fistCalAccRef.current;
+    if (acc.active) {
+      if (leftHandRaw?.fistSize !== undefined) acc.leftSamples.push(leftHandRaw.fistSize);
+      if (rightHandRaw?.fistSize !== undefined) acc.rightSamples.push(rightHandRaw.fistSize);
+      if (timestamp - acc.startTime >= 1500) {
+        acc.active = false;
+        const avg = (s: number[]) => s.length > 0 ? s.reduce((a, b) => a + b, 0) / s.length : 0;
+        fistCalibrationRef.current = {
+          left: acc.leftSamples.length > 0 ? { baselineFistSize: avg(acc.leftSamples), sampleCount: acc.leftSamples.length } : null,
+          right: acc.rightSamples.length > 0 ? { baselineFistSize: avg(acc.rightSamples), sampleCount: acc.rightSamples.length } : null,
+        };
+        setIsFistCalibrating(false);
+      }
+    }
+
+    const punchEvents: PunchEvent[] = [];
+    const leftBaseline = fistCalibrationRef.current.left;
+    const rightBaseline = fistCalibrationRef.current.right;
+    if (leftHandRaw?.fistSize !== undefined && leftBaseline) {
+      const ev = detectPunchEvent(leftHandRaw.fistSize, leftBaseline.baselineFistSize, punchStateRef.current.left, timestamp, "left");
+      if (ev) punchEvents.push(ev);
+    }
+    if (rightHandRaw?.fistSize !== undefined && rightBaseline) {
+      const ev = detectPunchEvent(rightHandRaw.fistSize, rightBaseline.baselineFistSize, punchStateRef.current.right, timestamp, "right");
+      if (ev) punchEvents.push(ev);
+    }
+
+    const leftHand = leftHandRaw ? { ...leftHandRaw, isPunching: punchStateRef.current.left.isPunching } : null;
+    const rightHand = rightHandRaw ? { ...rightHandRaw, isPunching: punchStateRef.current.right.isPunching } : null;
+
     setState((prev) => ({
       leftArm,
       rightArm,
-      leftHand: raw.leftHandLandmarks ? buildHandState(raw.leftHandLandmarks) : null,
-      rightHand: raw.rightHandLandmarks ? buildHandState(raw.rightHandLandmarks) : null,
+      leftHand,
+      rightHand,
       leftHandLandmarks: raw.leftHandLandmarks,
       rightHandLandmarks: raw.rightHandLandmarks,
+      punchEvents,
       fps: fps ?? prev.fps,
       isReady: true,
     }));
@@ -195,5 +249,5 @@ export function useBodyDetectionProvider(
     };
   }, [loop, videoRef]);
 
-  return state;
+  return { ...state, startFistCalibration, fistCalibration: fistCalibrationRef.current, isFistCalibrating };
 }

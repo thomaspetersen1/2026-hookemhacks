@@ -37,11 +37,14 @@ type CalibrationPanelProps = {
   onReady: () => void;
 };
 
+type CalPhase = "body" | "fist" | "done";
+
 export function CalibrationPanel({ onReady }: CalibrationPanelProps) {
-  const { overlayCanvasRef, isReady } = useBodyDetection();
+  const { overlayCanvasRef, isReady, startFistCalibration } = useBodyDetection();
 
   const [pct, setPct] = useState(0);
-  const [confirmed, setConfirmed] = useState(false);
+  const [phase, setPhase] = useState<CalPhase>("body");
+  const [fistProgress, setFistProgress] = useState(0);
 
   // Simulate joint detection filling in over ~8 seconds then holding
   useEffect(() => {
@@ -49,6 +52,22 @@ export function CalibrationPanel({ onReady }: CalibrationPanelProps) {
     const id = setInterval(() => setPct((p) => Math.min(100, p + 1.4)), 110);
     return () => clearInterval(id);
   }, [pct]);
+
+  useEffect(() => {
+    if (phase !== "fist") return;
+    setFistProgress(0);
+    const start = Date.now();
+    const id = setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - start) / 1500) * 100);
+      setFistProgress(pct);
+      if (pct >= 100) { clearInterval(id); setPhase("done"); }
+    }, 50);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase === "done") onReady();
+  }, [phase, onReady]);
 
   const totalJoints = JOINTS.length;
   const lockedCount = Math.round((pct / 100) * totalJoints);
@@ -68,15 +87,11 @@ export function CalibrationPanel({ onReady }: CalibrationPanelProps) {
   });
 
   const statusLabel =
-    confirmed ? "Locked in ✓" :
-    pct >= 80  ? "Looking good — give a thumbs up when ready" :
-    pct >= 40  ? "Locking onto your joints…" :
-                 "Step back so your full body is visible";
-
-  const handleReady = () => {
-    setConfirmed(true);
-    onReady();
-  };
+    phase === "done" ? "Fist calibrated ✓" :
+    phase === "fist" ? "Hold both fists toward the camera…" :
+    pct >= 80        ? "Looking good — make fists and continue" :
+    pct >= 40        ? "Locking onto your joints…" :
+                       "Step back so your full body is visible";
 
   return (
     <div className="cal-panel">
@@ -139,14 +154,27 @@ export function CalibrationPanel({ onReady }: CalibrationPanelProps) {
         </div>
       </div>
 
-      <button
-        type="button"
-        className={`cal-ready-btn ${confirmed ? "confirmed" : ""}`}
-        onClick={handleReady}
-        disabled={confirmed}
-      >
-        {confirmed ? "✓ Locked in" : "👍 I'm ready"}
-      </button>
+      {phase === "fist" && (
+        <div className="fist-cal-bar">
+          <div className="fist-cal-fill" style={{ width: `${fistProgress}%` }} />
+        </div>
+      )}
+
+      {phase === "body" && (
+        <button
+          type="button"
+          className="cal-ready-btn"
+          onClick={() => { startFistCalibration(); setPhase("fist"); }}
+        >
+          Make fists and continue &rarr;
+        </button>
+      )}
+
+      {phase === "done" && (
+        <button type="button" className="cal-ready-btn confirmed" disabled>
+          Calibrated ✓
+        </button>
+      )}
 
       <style>{`
         .cal-panel {
@@ -192,6 +220,19 @@ export function CalibrationPanel({ onReady }: CalibrationPanelProps) {
           background: var(--leaf);
           box-shadow: none;
           cursor: default;
+        }
+        .fist-cal-bar {
+          width: 100%;
+          height: 12px;
+          border-radius: 6px;
+          background: rgba(0,0,0,0.1);
+          overflow: hidden;
+        }
+        .fist-cal-fill {
+          height: 100%;
+          background: var(--sun);
+          border-radius: 6px;
+          transition: width 0.05s linear;
         }
       `}</style>
     </div>

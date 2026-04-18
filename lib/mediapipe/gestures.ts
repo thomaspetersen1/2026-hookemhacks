@@ -1,4 +1,4 @@
-import type { GestureLabel, ArmState, HandState } from "@/types";
+import type { GestureLabel, ArmState, HandState, PunchEvent, PunchHand } from "@/types";
 
 type NormalizedLandmark = { x: number; y: number; z: number; visibility?: number };
 
@@ -122,6 +122,38 @@ export function calcPinchDistance(landmarks: NormalizedLandmark[]): number {
   return Math.min(1, dist / 0.3);
 }
 
+export function calcFistSize(landmarks: NormalizedLandmark[]): number {
+  if (landmarks.length < 18) return 0;
+  return Math.hypot(landmarks[5].x - landmarks[17].x, landmarks[5].y - landmarks[17].y);
+}
+
+export interface PunchDetectorState {
+  isPunching: boolean;
+  punchStartTime: number;
+}
+
+export function detectPunchEvent(
+  fistSize: number,
+  baseline: number,
+  state: PunchDetectorState,
+  timestamp: number,
+  hand: PunchHand,
+  threshold = 1.5,
+): PunchEvent | null {
+  if (baseline <= 0 || fistSize <= 0) return null;
+  const ratio = fistSize / baseline;
+  if (ratio >= threshold) {
+    if (!state.isPunching) {
+      state.isPunching = true;
+      state.punchStartTime = timestamp;
+      return { hand, enlargementRatio: ratio, timeToEnlargement: 0, timestampMs: timestamp };
+    }
+    return null;
+  }
+  state.isPunching = false;
+  return null;
+}
+
 export function buildArmState(
   shoulder: NormalizedLandmark,
   elbow: NormalizedLandmark,
@@ -156,8 +188,10 @@ export function buildArmState(
 }
 
 export function buildHandState(landmarks: NormalizedLandmark[]): HandState {
+  const gesture = detectGesture(landmarks);
   return {
-    gesture: detectGesture(landmarks),
+    gesture,
     pinchDistance: calcPinchDistance(landmarks),
+    fistSize: gesture === "fist" ? calcFistSize(landmarks) : undefined,
   };
 }
