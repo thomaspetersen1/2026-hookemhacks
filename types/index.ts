@@ -1,3 +1,10 @@
+// Shared types across the 4 tracks. Lock this contract before writing impl code.
+// Ref: HOOKEMHACKS_CONTEXT.md — Shared Types section.
+
+/**
+ * Normalized MediaPipe landmark. MediaPipe returns 33 keypoints per frame,
+ * each with x/y in normalized image coords [0,1] and z as depth (camera-relative).
+ */
 export interface PoseLandmark {
   x: number;
   y: number;
@@ -5,21 +12,94 @@ export interface PoseLandmark {
   visibility?: number;
 }
 
-export interface Player {
-  id: string;
-  name: string;
-  score: number;
+/** A single frame of pose data at a timestamp. */
+export interface PoseFrame {
+  timestampMs: number;
+  landmarks: PoseLandmark[]; // length 33 for MediaPipe Pose
 }
 
+/** Rolling window of pose frames — the unit we embed and search. */
+export interface PoseSequence {
+  sessionId: string;
+  startMs: number;
+  endMs: number;
+  frames: PoseFrame[];
+}
+
+/**
+ * Humanoid bone names — matches VRM Humanoid spec and Kalidokit.Pose.solve()
+ * output keys, so Kalidokit rotations can be applied directly by name.
+ */
+export type HumanoidBoneName =
+  | "Hips"
+  | "Spine"
+  | "Chest"
+  | "Neck"
+  | "Head"
+  | "LeftShoulder"
+  | "LeftUpperArm"
+  | "LeftLowerArm"
+  | "LeftHand"
+  | "RightShoulder"
+  | "RightUpperArm"
+  | "RightLowerArm"
+  | "RightHand"
+  | "LeftUpperLeg"
+  | "LeftLowerLeg"
+  | "LeftFoot"
+  | "RightUpperLeg"
+  | "RightLowerLeg"
+  | "RightFoot";
+
+export interface BoneRotation {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Kalidokit solver output — bone rotations to apply to the avatar rig. */
+export interface RigRotations {
+  pose?: Partial<Record<HumanoidBoneName, BoneRotation>>;
+  face?: Record<string, unknown>;
+  leftHand?: Record<string, unknown>;
+  rightHand?: Record<string, unknown>;
+}
+
+export type Sport = "swords" | "tennis" | "golf";
+
+export type GamePhase = "idle" | "countdown" | "playing" | "paused" | "ended";
+
+/** Local player is always "self". Remote slot(s) are room-scoped opaque ids. */
+export type PlayerId = string;
+export const SELF_PLAYER_ID: PlayerId = "self";
+export const REMOTE_PLAYER_ID: PlayerId = "remote";
+
+export interface Player {
+  id: PlayerId;
+  displayName: string;
+  tint: string; // primary avatar color (hex)
+  score: number;
+  isLocal: boolean;
+  isConnected: boolean;
+}
+
+/** A spawn/stance point for a player within a sport scene. */
+export interface PlayerSlot {
+  position: [number, number, number];
+  rotationY: number; // radians, applied to avatar root
+}
+
+/** Room metadata — used by Track 3 for presence / lobby screens. */
 export interface Room {
   id: string;
   players: Player[];
   status: "waiting" | "active" | "finished";
 }
 
+/** Top-level snapshot of the game state — serializable for persistence / replay. */
 export interface GameState {
   room: Room;
-  localPlayerId: string;
+  localPlayerId: PlayerId;
   score: number;
   caloriesBurned: number;
 }
@@ -51,4 +131,38 @@ export interface Move {
   swingSpeed: number;
   raisedHeight: number;
   timestamp: number;
+}
+
+export interface SessionRecord {
+  id: string;
+  userId: string | null;
+  roomId: string | null;
+  sport: Sport;
+  startedAt: string;
+  endedAt: string | null;
+  finalScore: number | null;
+}
+
+export type GameEventType = "hit" | "miss" | "score" | "strike" | "foul" | "custom";
+
+export interface GameEvent {
+  sessionId: string;
+  timestampMs: number;
+  eventType: GameEventType;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SearchQuery {
+  raw: string;
+  intent?: "motion" | "event" | "comparative";
+  filters?: Record<string, unknown>;
+  embedding?: number[];
+}
+
+export interface SearchResult {
+  sessionId: string;
+  startMs: number;
+  endMs: number;
+  videoClipUrl: string;
+  score: number;
 }

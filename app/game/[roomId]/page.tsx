@@ -1,7 +1,14 @@
-export default function GamePage({ params }: { params: { roomId: string } }) {
-  return (
-    <main>
-      <h1>Room: {params.roomId}</h1>
-    </main>
-  );
+import { GameRoomClient } from "./GameRoomClient";
+
+export default async function GameRoomPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ roomId: string }>;
+  searchParams: Promise<{ debug?: string }>;
+}) {
+  const { roomId } = await params;
+  const { debug } = await searchParams;
+
+  return <GameRoomClient roomId={roomId} debug={debug === "1"} />;
 }
