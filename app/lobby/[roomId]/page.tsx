@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Backdrop } from "@/components/scenery/Scenery";
 import { CalibrationPanel } from "@/components/pages/CalibrationPanel";
 import { BRAND } from "@/components/shared/constants";
+import BodyDetector from "@/components/detection/BodyDetector";
 import {
   getRoomByCode,
   joinRoom,
@@ -238,7 +239,9 @@ export default function LobbyPage() {
 
         {/* ── Right: calibration ── */}
         <div className="lobby-cal card">
-          <CalibrationPanel onReady={() => setLocalReady(true)} />
+          <BodyDetector>
+            <CalibrationPanel onReady={() => setLocalReady(true)} />
+          </BodyDetector>
         </div>
       </div>
 
