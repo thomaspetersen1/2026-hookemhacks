@@ -21,6 +21,7 @@ export class GameChannel {
   private readonly roomId: string;
   private readonly playerId: string;
   private readonly playerName: string;
+  private ready = false;
 
   constructor(roomId: string, playerId: string, playerName: string) {
     this.roomId = roomId;
@@ -32,6 +33,20 @@ export class GameChannel {
         presence: { key: playerId },
       },
     });
+  }
+
+  private trackPresence(): Promise<unknown> {
+    return this.channel.track({
+      playerId: this.playerId,
+      name: this.playerName,
+      onlineAt: new Date().toISOString(),
+      ready: this.ready,
+    });
+  }
+
+  async setReady(ready: boolean): Promise<void> {
+    this.ready = ready;
+    await this.trackPresence();
   }
 
   subscribe(handlers: {
@@ -89,14 +104,22 @@ export class GameChannel {
         // (dev StrictMode remount, reconnect, two tabs) — collapse to one.
         const players: PlayerPresence[] = [];
         for (const entries of Object.values(state)) {
-          const first = entries[0];
-          if (first) {
-            players.push({
-              playerId: first.playerId,
-              name: first.name,
-              onlineAt: first.onlineAt,
-            });
-          }
+          if (entries.length === 0) continue;
+          // Multiple entries under one key = same player across multiple
+          // connections (dev remounts, reconnects, or same-machine tabs
+          // sharing a playerId). Collapse them: the player is "ready" if any
+          // of their connections reports ready, and we keep the freshest
+          // onlineAt / name for display.
+          const anyReady = entries.some((e) => !!e.ready);
+          const latest = entries.reduce((a, b) =>
+            new Date(a.onlineAt).getTime() >= new Date(b.onlineAt).getTime() ? a : b,
+          );
+          players.push({
+            playerId: latest.playerId,
+            name: latest.name,
+            onlineAt: latest.onlineAt,
+            ready: anyReady,
+          });
         }
         onPresenceChange(players);
       });
@@ -105,11 +128,7 @@ export class GameChannel {
     return new Promise((resolve, reject) => {
       this.channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          await this.channel.track({
-            playerId: this.playerId,
-            name: this.playerName,
-            onlineAt: new Date().toISOString(),
-          });
+          await this.trackPresence();
           resolve();
         } else if (status === "CHANNEL_ERROR") {
           reject(new Error("Failed to connect to game channel"));

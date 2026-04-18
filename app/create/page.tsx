@@ -7,6 +7,7 @@ import { Backdrop } from "@/components/scenery/Scenery";
 import { BRAND } from "@/components/shared/constants";
 import { createRoom } from "@/lib/multiplayer/roomService";
 import { useIdentity } from "@/hooks/useIdentity";
+import { copyToClipboard } from "@/lib/clipboard";
 
 export default function CreatePage() {
   const router = useRouter();
@@ -27,9 +28,9 @@ export default function CreatePage() {
       });
   }, [playerId, code]);
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (!code) return;
-    navigator.clipboard.writeText(code).catch(() => {});
+    await copyToClipboard(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
   };
@@ -45,28 +46,7 @@ export default function CreatePage() {
     <div className="app-stage" data-time="day" data-intensity="normal">
       <Backdrop />
 
-      <div className="topbar">
-        <Link href="/" className="logo" style={{ textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="logo-mark" />
-          <span>{BRAND.gameName}</span>
-        </Link>
-        <div className="nav-pills">
-          <div className="nav-pill active">
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>01</span>
-            Create
-          </div>
-          <div className="nav-pill" style={{ opacity: 0.45 }}>
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>02</span>
-            Lobby
-          </div>
-          <div className="nav-pill" style={{ opacity: 0.45 }}>
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>03</span>
-            Play
-          </div>
-        </div>
-      </div>
-
-      <div className="hj-wrap" style={{ paddingTop: "80px" }}>
+      <div className="hj-wrap">
         <div className="hj-card card">
           <div className="hj-eyebrow">{BRAND.event} · Create a room</div>
           <h1 className="hj-title">Build a cove.</h1>
