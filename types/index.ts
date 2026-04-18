@@ -23,3 +23,32 @@ export interface GameState {
   score: number;
   caloriesBurned: number;
 }
+
+export type GestureLabel = "open" | "fist" | "point" | "peace" | "thumbsUp" | "unknown";
+
+export interface ArmState {
+  elbowAngle: number;
+  swingSpeed: number;
+  raisedHeight: number;
+  isExtended: boolean;
+}
+
+export interface HandState {
+  gesture: GestureLabel;
+  pinchDistance: number;
+}
+
+export interface BodyTrackingState {
+  leftArm: ArmState | null;
+  rightArm: ArmState | null;
+  leftHand: HandState | null;
+  rightHand: HandState | null;
+  fps: number;
+  isReady: boolean;
+}
+
+export interface Move {
+  swingSpeed: number;
+  raisedHeight: number;
+  timestamp: number;
+}
