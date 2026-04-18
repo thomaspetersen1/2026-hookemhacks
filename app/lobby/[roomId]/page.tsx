@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Backdrop } from "@/components/scenery/Scenery";
 import { CalibrationPanel } from "@/components/pages/CalibrationPanel";
 import { BRAND } from "@/components/shared/constants";
+import BodyDetector from "@/components/detection/BodyDetector";
 import {
   getRoomByCode,
   joinRoom,
