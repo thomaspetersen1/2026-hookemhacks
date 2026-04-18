@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/client";
 
 export function usePoseSync(roomId: string, onRemotePose: (pose: unknown) => void) {
   useEffect(() => {
-    const channel = subscribeToRoom(roomId, ({ payload }) => onRemotePose(payload));
+    const channel = subscribeToRoom(roomId, (payload: unknown) => onRemotePose((payload as { payload: unknown })?.payload));
     return () => { supabase.removeChannel(channel); };
   }, [roomId]);
 
