@@ -70,9 +70,12 @@ function drawDebugCanvas(
 }
 
 const defaultState: BodyTrackingState = {
-  leftArm: null, rightArm: null,
-  leftHand: null, rightHand: null,
-  fps: 0, isReady: false,
+  leftArm: null,
+  rightArm: null,
+  leftHand: null,
+  rightHand: null,
+  fps: 0,
+  isReady: false,
 };
 
 export const BodyTrackingContext = createContext<BodyTrackingState>(defaultState);
