@@ -177,9 +177,23 @@ export interface HandState {
   pinchDistance: number;
 }
 
+/**
+ * Torso orientation derived from the four shoulder/hip pose landmarks.
+ * Drives Spine + Chest rotations on the avatar.
+ */
+export interface TorsoState {
+  /** Radians — pitch. + = leaning forward (chest toward camera), 0 = upright. */
+  leanForward: number;
+  /** Radians — roll. + = leaning to the subject's own right side. */
+  leanSide: number;
+  /** Radians — yaw. + = shoulders rotated to subject's right relative to hips. */
+  twist: number;
+}
+
 export interface BodyTrackingState {
   leftArm: ArmState | null;
   rightArm: ArmState | null;
+  torso: TorsoState | null;
   leftHand: HandState | null;
   rightHand: HandState | null;
   /**
