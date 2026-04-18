@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FigureSilhouette } from "../scenery/Scenery";
+import { AvatarStage } from "../game/AvatarStage";
 import type { ScoreLevel } from "../shared/types";
 
 const GAME_PLAYERS = [
@@ -124,7 +124,7 @@ export function GameScreen({ onPause, onEnd, playerCount = 4, scoreLevel = "mid"
             <div className="fake-palm" />
           </div>
           <div className="figure">
-            <FigureSilhouette />
+            <AvatarStage />
           </div>
 
           <div className="combo-badge">
