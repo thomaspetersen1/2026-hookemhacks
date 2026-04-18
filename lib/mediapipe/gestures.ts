@@ -14,10 +14,13 @@ export function calcAngle(a: Vec3, b: Vec3, c: Vec3): number {
   return (Math.acos(Math.max(-1, Math.min(1, dot / (magAB * magCB)))) * 180) / Math.PI;
 }
 
+const JITTER_THRESHOLD = 0.032; // ignore sub-pixel MediaPipe noise
+
 export function calcSwingSpeed(prev: Vec3, curr: Vec3, dt: number): number {
   if (dt === 0) return 0;
   const dist = Math.sqrt((curr.x - prev.x) ** 2 + (curr.y - prev.y) ** 2 + (curr.z - prev.z) ** 2);
-  return Math.min(1, dist / dt / 2);
+  if (dist < JITTER_THRESHOLD) return 0;
+  return dist / dt / 6;
 }
 
 // MediaPipe y=0 is top of frame, y=1 is bottom — so lower wrist.y = higher physical position
