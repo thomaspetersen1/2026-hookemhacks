@@ -92,6 +92,7 @@ export function useBodyDetectionProvider(
 ) {
   const [state, setState] = useState<BodyTrackingState>(defaultState);
   const prevWristsRef = useRef<{ left: NormalizedLandmark | null; right: NormalizedLandmark | null }>({ left: null, right: null });
+  const prevForwardAnglesRef = useRef<{ left: number | null; right: number | null }>({ left: null, right: null });
   const prevTimeRef = useRef<number>(0);
   const rafRef = useRef<number>(0);
   const fpsRef = useRef<{ count: number; lastTime: number }>({ count: 0, lastTime: 0 });
@@ -120,9 +121,10 @@ export function useBodyDetectionProvider(
 
     if (raw.poseLandmarks.length > 0) {
       const lm = raw.poseLandmarks[0];
-      leftArm = buildArmState(lm[POSE.RIGHT_SHOULDER], lm[POSE.RIGHT_ELBOW], lm[POSE.RIGHT_WRIST], prevWristsRef.current.left, dt);
-      rightArm = buildArmState(lm[POSE.LEFT_SHOULDER], lm[POSE.LEFT_ELBOW], lm[POSE.LEFT_WRIST], prevWristsRef.current.right, dt);
-      prevWristsRef.current = { left: lm[POSE.RIGHT_WRIST], right: lm[POSE.LEFT_WRIST] };
+      leftArm = buildArmState(lm[POSE.LEFT_SHOULDER], lm[POSE.LEFT_ELBOW], lm[POSE.LEFT_WRIST], prevWristsRef.current.left, dt, prevForwardAnglesRef.current.left);
+      rightArm = buildArmState(lm[POSE.RIGHT_SHOULDER], lm[POSE.RIGHT_ELBOW], lm[POSE.RIGHT_WRIST], prevWristsRef.current.right, dt, prevForwardAnglesRef.current.right);
+      prevWristsRef.current = { left: lm[POSE.LEFT_WRIST], right: lm[POSE.RIGHT_WRIST] };
+      prevForwardAnglesRef.current = { left: leftArm?.forwardAngle ?? null, right: rightArm?.forwardAngle ?? null };
     }
 
     fpsRef.current.count++;

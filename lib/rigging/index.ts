@@ -59,20 +59,30 @@ export function armStateToRigRotations(
   //
   // LowerArm.x: elbow bend; -(180° − elbowAngle) in radians so a straight
   // arm is 0 and fully bent is -π.
+  // When the arm is fully extended, MediaPipe's pseudo-depth z is unreliable
+  // and forwardAngle can read as neutral or backward. For a fighting game,
+  // "extended arm" almost always means a forward punch/thrust, so we clamp
+  // forwardAngle to at least EXTENDED_FWD_BIAS radians when isExtended is true.
+  const MAX_FWD = Math.PI / 2;   // 90° — arm can't go more than horizontal forward
+  const MIN_FWD = 0;             // never backward — backward is always z noise
+  const EXTENDED_FWD_BIAS = 0.5; // ~29° floor when arm is straight (up from 0.4)
+  const MAX_SIDE_RAISE = toRad(85);
+
+  const clampFwd = (arm: ArmState) => {
+    const raw = arm.isExtended
+      ? Math.max(arm.forwardAngle, EXTENDED_FWD_BIAS)
+      : arm.forwardAngle;
+    return Math.max(MIN_FWD, Math.min(MAX_FWD, raw));
+  };
+
   if (left) {
-    pose.LeftUpperArm = {
-      x: -left.forwardAngle,
-      y: 0,
-      z: left.sideRaiseAngle,
-    };
+    const side = Math.max(-MAX_SIDE_RAISE, Math.min(MAX_SIDE_RAISE, left.sideRaiseAngle));
+    pose.LeftUpperArm = { x: -clampFwd(left), y: 0, z: -side };
     pose.LeftLowerArm = { x: -toRad(180 - left.elbowAngle), y: 0, z: 0 };
   }
   if (right) {
-    pose.RightUpperArm = {
-      x: -right.forwardAngle,
-      y: 0,
-      z: right.sideRaiseAngle,
-    };
+    const side = Math.max(-MAX_SIDE_RAISE, Math.min(MAX_SIDE_RAISE, right.sideRaiseAngle));
+    pose.RightUpperArm = { x: -clampFwd(right), y: 0, z: -side };
     pose.RightLowerArm = { x: -toRad(180 - right.elbowAngle), y: 0, z: 0 };
   }
 

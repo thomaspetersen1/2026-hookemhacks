@@ -54,9 +54,13 @@ export function calcRaisedHeight(wrist: Vec3, shoulder: Vec3): number {
  * -π/2 fully backward.
  */
 export function calcForwardAngle(wrist: Vec3, shoulder: Vec3): number {
-  const dy = wrist.y - shoulder.y; // positive when wrist below shoulder
-  const dz = wrist.z - shoulder.z; // negative when wrist forward of shoulder
-  return Math.atan2(-dz, Math.max(dy, 1e-4));
+  const dz = wrist.z - shoulder.z;
+  // Use the 2D XY arm span as the denominator instead of just dy. When the arm
+  // is raised sideways (dy ≈ 0), dy alone collapses to 1e-4 and any z noise
+  // becomes atan2(noise, 0.0001) ≈ π/2 — a false forward reading. span2D stays
+  // large (~0.2) whenever the arm is extended, keeping z noise proportionally tiny.
+  const span2D = Math.hypot(wrist.x - shoulder.x, wrist.y - shoulder.y);
+  return Math.atan2(-dz, Math.max(span2D, 0.04));
 }
 
 /**
@@ -123,7 +127,8 @@ export function buildArmState(
   elbow: NormalizedLandmark,
   wrist: NormalizedLandmark,
   prevWrist: Vec3 | null,
-  dt: number
+  dt: number,
+  prevForwardAngle: number | null = null,
 ): ArmState {
   // When the arm points at/away from the camera, shoulder/elbow/wrist all
   // project to nearly the same pixel — 2D angle math collapses and yields
@@ -135,7 +140,10 @@ export function buildArmState(
   const elbowAngle = span2D < 0.06 ? 180 : calcAngle2D(shoulder, elbow, wrist);
   const swingSpeed = prevWrist ? calcSwingSpeed(prevWrist, wrist, dt) : 0;
   const raisedHeight = calcRaisedHeight(wrist, shoulder);
-  const forwardAngle = calcForwardAngle(wrist, shoulder);
+  const rawForward = calcForwardAngle(wrist, shoulder);
+  const forwardAngle = prevForwardAngle !== null
+    ? prevForwardAngle + 0.4 * (rawForward - prevForwardAngle)
+    : rawForward;
   const sideRaiseAngle = calcSideRaiseAngle(wrist, shoulder);
   return {
     elbowAngle,
