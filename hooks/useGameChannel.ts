@@ -52,6 +52,10 @@ export function useGameChannel({
   useEffect(() => {
     if (!roomId || !playerId) return;
 
+    // In dev StrictMode, this effect runs → cleans up → runs again. The first
+    // channel can emit CHANNEL_ERROR as it's torn down mid-connect; `cancelled`
+    // lets us ignore that noise and only react to the final channel.
+    let cancelled = false;
     const channel = new GameChannel(roomId, playerId, playerName);
     channelRef.current = channel;
 
@@ -64,10 +68,18 @@ export function useGameChannel({
         onPoseSnapshot: (p) => onPoseSnapshotRef.current?.(p),
         onPresenceChange: setPlayers,
       })
-      .then(() => setConnected(true))
-      .catch(console.error);
+      .then(() => {
+        if (!cancelled) setConnected(true);
+      })
+      .catch(() => {
+        // Swallow CHANNEL_ERROR silently. Happens on StrictMode remount, brief
+        // disconnects during lobby→game nav, Cloudflare hiccups, etc. Supabase
+        // auto-reconnects; if it's actually broken the symptom is visible (no
+        // presence / no broadcasts) without needing a dev-overlay popup.
+      });
 
     return () => {
+      cancelled = true;
       channel.unsubscribe();
       setConnected(false);
     };
@@ -105,8 +117,8 @@ export function useGameChannel({
     []
   );
 
-  const setLobbyReady = useCallback((ready: boolean) => {
-    channelRef.current?.setLobbyReady(ready);
+  const setReady = useCallback((ready: boolean) => {
+    void channelRef.current?.setReady(ready);
   }, []);
 
   return {
@@ -117,6 +129,6 @@ export function useGameChannel({
     broadcastHit,
     broadcastGameEvent,
     broadcastPoseSnapshot,
-    setLobbyReady,
+    setReady,
   };
 }

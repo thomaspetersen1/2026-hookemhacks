@@ -49,6 +49,21 @@ function JoinForm() {
     }
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData
+      .getData("text")
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "")
+      .slice(0, 4);
+    if (!text) return;
+    e.preventDefault();
+    const next: string[] = ["", "", "", ""];
+    for (let i = 0; i < text.length; i++) next[i] = text[i];
+    setInputCode(next);
+    const focusIdx = Math.min(text.length, 3);
+    inputRefs.current[focusIdx]?.focus();
+  };
+
   const setQuickCode = (code: string) => setInputCode(code.split(""));
 
   const filled = inputCode.every((c) => c);
@@ -71,28 +86,7 @@ function JoinForm() {
     <div className="app-stage" data-time="day" data-intensity="normal">
       <Backdrop />
 
-      <div className="topbar">
-        <Link href="/" className="logo" style={{ textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="logo-mark" />
-          <span>{BRAND.gameName}</span>
-        </Link>
-        <div className="nav-pills">
-          <div className="nav-pill active">
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>01</span>
-            Join
-          </div>
-          <div className="nav-pill" style={{ opacity: 0.45 }}>
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>02</span>
-            Lobby
-          </div>
-          <div className="nav-pill" style={{ opacity: 0.45 }}>
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>03</span>
-            Play
-          </div>
-        </div>
-      </div>
-
-      <div className="hj-wrap" style={{ paddingTop: "80px" }}>
+      <div className="hj-wrap">
         <div className="hj-card card">
           <div className="hj-eyebrow">{BRAND.event} · Join a room</div>
           <h1 className="hj-title">Drop into a cove.</h1>
@@ -111,6 +105,7 @@ function JoinForm() {
                 value={c}
                 onChange={(e) => handleChange(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
+                onPaste={handlePaste}
                 autoFocus={i === 0}
               />
             ))}

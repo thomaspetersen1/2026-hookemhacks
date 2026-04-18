@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
 import { Backdrop } from "@/components/scenery/Scenery";
 import { CalibrationPanel } from "@/components/pages/CalibrationPanel";
 import { BRAND } from "@/components/shared/constants";
@@ -15,6 +14,7 @@ import {
 } from "@/lib/multiplayer/roomService";
 import { useGameChannel } from "@/hooks/useGameChannel";
 import { useIdentity } from "@/hooks/useIdentity";
+import { copyToClipboard } from "@/lib/clipboard";
 import type { Room } from "@/lib/multiplayer/types";
 
 const AVATAR_COLORS = ["#FF6B4A", "#2BB3C0", "#2E7D5B", "#FF5E7E", "#FFD24A", "#8A5EE0", "#4A90E2", "#E06B4A"];
@@ -68,7 +68,7 @@ export default function LobbyPage() {
     };
   }, [code, playerId, router]);
 
-  const { players, broadcastGameEvent, setLobbyReady } = useGameChannel({
+  const { players, broadcastGameEvent, setReady } = useGameChannel({
     roomId: room?.id ?? "",
     playerId,
     playerName: playerName || playerId,
@@ -81,8 +81,8 @@ export default function LobbyPage() {
   const maxPlayers = room?.max_players ?? 2;
   const emptySlots = Math.max(0, maxPlayers - players.length);
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(code).catch(() => {});
+  const copyCode = async () => {
+    await copyToClipboard(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
   };
@@ -115,27 +115,6 @@ export default function LobbyPage() {
     <div className="app-stage" data-time="day" data-intensity="normal">
       <Backdrop />
 
-      <div className="topbar">
-        <Link href="/" className="logo" style={{ textDecoration: "none", color: "inherit", display: "flex", alignItems: "center", gap: 8 }}>
-          <div className="logo-mark" />
-          <span>{BRAND.gameName}</span>
-        </Link>
-        <div className="nav-pills">
-          <div className="nav-pill" style={{ opacity: 0.45 }}>
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>01</span>
-            Create
-          </div>
-          <div className="nav-pill active">
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>02</span>
-            Lobby
-          </div>
-          <div className="nav-pill" style={{ opacity: 0.45 }}>
-            <span className="mono" style={{ fontSize: 11, opacity: 0.7 }}>03</span>
-            Play
-          </div>
-        </div>
-      </div>
-
       <div className="lobby-layout">
         {/* ── Left: player list ── */}
         <div className="lobby-panel card">
@@ -159,7 +138,9 @@ export default function LobbyPage() {
 
           <div className="players-label" style={{ marginTop: 20 }}>
             <span>Crew in the cove</span>
-            <span className="count">{players.length}/{maxPlayers}</span>
+            <span className="count">
+              {players.filter((p) => p.ready).length}/{players.length} ready
+            </span>
           </div>
 
           {loadError && (
@@ -218,17 +199,28 @@ export default function LobbyPage() {
             >
               ← Leave
             </button>
-            {isHost ? (
-              <button
-                type="button"
-                className="btn primary"
-                style={{ flex: 1, opacity: starting || players.length < 2 ? 0.5 : 1 }}
-                disabled={starting || players.length < 2}
-                onClick={handleStart}
-              >
-                {starting ? "Starting…" : "Start match →"}
-              </button>
-            ) : (
+            {isHost ? (() => {
+              const allReady = players.length >= 2 && players.every((p) => p.ready);
+              const disabled = starting || !allReady;
+              const label = starting
+                ? "Starting…"
+                : players.length < 2
+                  ? "Waiting for another player…"
+                  : !allReady
+                    ? "Waiting for all to lock in…"
+                    : "Start match →";
+              return (
+                <button
+                  type="button"
+                  className="btn primary"
+                  style={{ flex: 1, opacity: disabled ? 0.5 : 1 }}
+                  disabled={disabled}
+                  onClick={handleStart}
+                >
+                  {label}
+                </button>
+              );
+            })() : (
               <div
                 className="btn ghost"
                 style={{ flex: 1, textAlign: "center", opacity: 0.7, cursor: "default" }}
@@ -245,7 +237,7 @@ export default function LobbyPage() {
             <CalibrationPanel
               onReady={() => {
                 setLocalReady(true);
-                setLobbyReady(true);
+                void setReady(true);
               }}
             />
           </BodyDetector>
@@ -259,7 +251,7 @@ export default function LobbyPage() {
           display: flex;
           align-items: flex-start;
           gap: 20px;
-          padding: 90px 24px 24px;
+          padding: 24px;
           min-height: 100dvh;
           max-width: 1100px;
           margin: 0 auto;
@@ -267,7 +259,7 @@ export default function LobbyPage() {
         .lobby-panel {
           flex: 0 0 420px;
           overflow-y: auto;
-          max-height: calc(100dvh - 114px);
+          max-height: calc(100dvh - 48px);
           padding: 28px;
         }
         .lobby-cal {
@@ -275,14 +267,13 @@ export default function LobbyPage() {
           min-width: 0;
           display: flex;
           flex-direction: column;
-          height: calc(100dvh - 114px);
+          height: calc(100dvh - 48px);
           padding: 24px;
           overflow: hidden;
         }
         @media (max-width: 768px) {
           .lobby-layout {
             flex-direction: column;
-            padding-top: 80px;
           }
           .lobby-panel { flex: none; width: 100%; max-height: none; }
           .lobby-cal { height: 480px; width: 100%; }

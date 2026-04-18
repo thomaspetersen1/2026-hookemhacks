@@ -22,8 +22,7 @@ export interface PlayerPresence {
   playerId: string;
   name: string;
   onlineAt: string;
-  /** Lobby calibration / ready-up; synced via Realtime presence `track()`. */
-  ready?: boolean;
+  ready: boolean;
 }
 
 export interface PlayerState {

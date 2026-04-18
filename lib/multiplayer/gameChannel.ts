@@ -21,7 +21,9 @@ export class GameChannel {
   private readonly roomId: string;
   private readonly playerId: string;
   private readonly playerName: string;
-  private onlineAt: string;
+  /** Stable join time for this tab — avoids churning presence sort order on every ready toggle. */
+  private readonly onlineAt: string;
+  private ready = false;
 
   constructor(roomId: string, playerId: string, playerName: string) {
     this.roomId = roomId;
@@ -34,6 +36,20 @@ export class GameChannel {
         presence: { key: playerId },
       },
     });
+  }
+
+  private trackPresence(): Promise<unknown> {
+    return this.channel.track({
+      playerId: this.playerId,
+      name: this.playerName,
+      onlineAt: this.onlineAt,
+      ready: this.ready,
+    });
+  }
+
+  async setReady(ready: boolean): Promise<void> {
+    this.ready = ready;
+    await this.trackPresence();
   }
 
   subscribe(handlers: {
@@ -91,15 +107,19 @@ export class GameChannel {
         // (dev StrictMode remount, reconnect, two tabs) — collapse to one.
         const players: PlayerPresence[] = [];
         for (const entries of Object.values(state)) {
-          const first = entries[0];
-          if (first) {
-            players.push({
-              playerId: first.playerId,
-              name: first.name,
-              onlineAt: first.onlineAt,
-              ready: Boolean(first.ready),
-            });
-          }
+          if (entries.length === 0) continue;
+          // Multiple entries under one key = same player across multiple
+          // connections. The player is "ready" if any connection reports ready.
+          const anyReady = entries.some((e) => !!e.ready);
+          const latest = entries.reduce((a, b) =>
+            new Date(a.onlineAt).getTime() >= new Date(b.onlineAt).getTime() ? a : b,
+          );
+          players.push({
+            playerId: latest.playerId,
+            name: latest.name,
+            onlineAt: latest.onlineAt,
+            ready: anyReady,
+          });
         }
         onPresenceChange(players);
       });
@@ -108,13 +128,8 @@ export class GameChannel {
     return new Promise((resolve, reject) => {
       this.channel.subscribe(async (status) => {
         if (status === "SUBSCRIBED") {
-          this.onlineAt = new Date().toISOString();
-          await this.channel.track({
-            playerId: this.playerId,
-            name: this.playerName,
-            onlineAt: this.onlineAt,
-            ready: false,
-          });
+          this.ready = false;
+          await this.trackPresence();
           resolve();
         } else if (status === "CHANNEL_ERROR") {
           reject(new Error("Failed to connect to game channel"));
@@ -171,16 +186,6 @@ export class GameChannel {
 
   // Fire-and-forget pose frame. Expect callers to throttle (~15 Hz) — this
   // method itself does not rate-limit.
-  /** Updates lobby “calibrated & ready” flag for this connection (presence). */
-  setLobbyReady(ready: boolean): void {
-    void this.channel.track({
-      playerId: this.playerId,
-      name: this.playerName,
-      onlineAt: this.onlineAt,
-      ready,
-    });
-  }
-
   broadcastPoseSnapshot(
     snapshot: Omit<PoseSnapshot, "playerId" | "timestamp">,
   ): void {
