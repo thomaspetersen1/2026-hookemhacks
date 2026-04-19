@@ -27,6 +27,7 @@ export default function GamePage() {
   const [matchPct, setMatchPct] = useState(TWEAK_DEFAULTS.matchPct);
   const [leaving, setLeaving] = useState(false);
   const setHostId = useGameStore((s) => s.setHostId);
+  const setPlayerConnected = useGameStore((s) => s.setPlayerConnected);
 
   useEffect(() => {
     if (!code) return;
@@ -104,6 +105,10 @@ export default function GamePage() {
     setSoloTimedOut(false);
     setPresenceTimedOut(false);
   }, [hasPeerPresence]);
+
+  useEffect(() => {
+    setPlayerConnected(REMOTE_PLAYER_ID, hasPeerPresence);
+  }, [hasPeerPresence, setPlayerConnected]);
   const ready =
     peerBroadcastSeen ||
     (connected && (soloTimedOut || presenceTimedOut));
