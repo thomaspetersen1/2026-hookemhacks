@@ -27,8 +27,8 @@ export function OpponentGuardBadge({
       <Shield
         size={56}
         strokeWidth={2}
-        className="text-black drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)]"
-        fill="black"
+        className="text-red-600 drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)]"
+        fill="currentColor"
       />
     </Html>
   );
