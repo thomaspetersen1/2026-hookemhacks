@@ -134,7 +134,7 @@ export default function LobbyPage() {
       <div className="lobby-layout">
         {/* ── Left: player list ── */}
         <div className="lobby-panel card">
-          <div className="hj-eyebrow">{BRAND.event} · {BRAND.gameName} · Lobby</div>
+          <div className="hj-eyebrow">{BRAND.gameName} · Lobby</div>
           <h2 className="hj-title" style={{ fontSize: "clamp(24px, 4vw, 36px)", marginBottom: 4 }}>
             Build a cove.
           </h2>
