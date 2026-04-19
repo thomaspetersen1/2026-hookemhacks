@@ -49,6 +49,12 @@ export class GameChannel {
   private stableTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
   private destroyed = false;
+  // True while reconnect() is actively tearing down + re-subscribing. The
+  // removeChannel() call there synchronously fires a CLOSED status on the
+  // old channel's callback, which would otherwise schedule a backoff retry
+  // and race against the fresh subscribe we're about to do. Suppresses the
+  // retry scheduler during that window.
+  private reconnecting = false;
 
   constructor(roomId: string, playerId: string, playerName: string) {
     this.roomId = roomId;
@@ -203,7 +209,7 @@ export class GameChannel {
    * retry subscribe after an exponential-backoff delay. Dedupes against
    * multiple simultaneous status events (CLOSED often fires twice). */
   private scheduleReconnect(): void {
-    if (this.retryTimer || this.destroyed) return;
+    if (this.retryTimer || this.destroyed || this.reconnecting) return;
     const delay = Math.min(RECONNECT_BASE_MS * 2 ** this.retryAttempt, RECONNECT_MAX_MS);
     this.retryAttempt++;
     console.log("[GC] reconnect scheduled in", delay, "ms (attempt", this.retryAttempt, ")");
@@ -318,5 +324,41 @@ export class GameChannel {
       this.stableTimer = null;
     }
     supabase.removeChannel(this.channel);
+  }
+
+  /**
+   * Tear down the current channel and re-subscribe with the same handlers.
+   * Called when a peer first appears in presence — there's a wedged state
+   * where the initial alone-in-room subscribe doesn't deliver broadcasts
+   * after the peer joins, and recreating the channel clears it. Equivalent
+   * to what a manual page reload on both clients fixes.
+   */
+  async reconnect(): Promise<void> {
+    if (this.destroyed || !this.handlers || this.reconnecting) return;
+    console.log("[GC] manual reconnect (peer arrival)");
+    this.reconnecting = true;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
+    if (this.stableTimer) {
+      clearTimeout(this.stableTimer);
+      this.stableTimer = null;
+    }
+    this.retryAttempt = 0;
+    // removeChannel synchronously fires CLOSED on the old channel's
+    // callback — scheduleReconnect's `reconnecting` guard above skips it.
+    supabase.removeChannel(this.channel);
+    this.channel = this.createChannel();
+    this.bindHandlers();
+    try {
+      await this.startSubscribe();
+    } catch {
+      // startSubscribe's reject path schedules a backoff retry internally
+      // via scheduleReconnect. By the time that runs we'll have cleared
+      // `reconnecting`, so the retry proceeds normally.
+    } finally {
+      this.reconnecting = false;
+    }
   }
 }
