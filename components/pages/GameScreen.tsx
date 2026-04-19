@@ -56,11 +56,14 @@ export function GameScreen({
   const debug = !hideDebug;
 
   const [debugPanel, setDebugPanel] = useState(false);
+  const [combatStarted, setCombatStarted] = useState(false);
 
   return (
     <BodyDetector debug={debug}>
       <CVRigBridge playerId={SELF_PLAYER_ID} />
-      {roomId && playerId && <IngestionBridge roomId={roomId} playerId={playerId} />}
+      {roomId && playerId && (
+        <IngestionBridge roomId={roomId} playerId={playerId} combatStarted={combatStarted} />
+      )}
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={debugPanel} />
         <HPBars />
@@ -71,7 +74,11 @@ export function GameScreen({
           onCloseDebug={() => setDebugPanel(false)}
         />
       </div>
-      <GameLoadingOverlay ready={ready} hasPeerPresence={hasPeerPresence} />
+      <GameLoadingOverlay
+        ready={ready}
+        hasPeerPresence={hasPeerPresence}
+        onDone={() => setCombatStarted(true)}
+      />
     </BodyDetector>
   );
 }

@@ -23,6 +23,9 @@ type GameLoadingOverlayProps = {
   ready: boolean;
   /** Whether a peer is visible in presence; affects connecting-phase copy. */
   hasPeerPresence: boolean;
+  /** Fires exactly once when the overlay transitions out of guard-done into
+   *  done — the signal that combat is about to begin. */
+  onDone?: () => void;
 };
 
 /**
@@ -35,7 +38,7 @@ type GameLoadingOverlayProps = {
  *
  * Must be mounted inside a <BodyDetector> so useBodyDetection() is available.
  */
-export function GameLoadingOverlay({ ready, hasPeerPresence }: GameLoadingOverlayProps) {
+export function GameLoadingOverlay({ ready, hasPeerPresence, onDone }: GameLoadingOverlayProps) {
   const { leftHandLandmarks, rightHandLandmarks } = useBodyDetection();
   const baseline = usePunchCalibrationStore((s) => s.baseline);
   const guardCountdown = usePunchCalibrationStore((s) => s.countdown);
@@ -126,9 +129,12 @@ export function GameLoadingOverlay({ ready, hasPeerPresence }: GameLoadingOverla
   // guard-done → done (unmount overlay, reveal game).
   useEffect(() => {
     if (phase !== "guard-done") return;
-    const t = window.setTimeout(() => setPhase("done"), GUARD_DONE_MS);
+    const t = window.setTimeout(() => {
+      onDone?.();
+      setPhase("done");
+    }, GUARD_DONE_MS);
     return () => window.clearTimeout(t);
-  }, [phase]);
+  }, [phase, onDone]);
 
   // Position the BodyDetector's debug MediaPipe canvas to match the phase:
   //   connecting + guard-leadin → hidden (no camera visible)
