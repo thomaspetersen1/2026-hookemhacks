@@ -54,6 +54,14 @@ export default function GamePage() {
       // Ignore our own echo (GameChannel uses broadcast self:false, so this
       // shouldn't fire, but guard anyway). Remote rigs land in the REMOTE
       // pose slot — the Avatar reads from there and animates automatically.
+      // DEBUG(multiplayer-broadcast-flakiness): logs every incoming pose.
+      // If the sender's console shows "[pose-sync] broadcast #N" but this
+      // line never fires on the other tab, the break is server-side (Supabase
+      // not relaying) or transport (channel CLOSED without reconnect). If
+      // this fires but the filter below trips, both tabs share the same
+      // `hookem:playerId` in localStorage — common when testing two tabs in
+      // one browser profile.
+      console.log("[pose-sync] recv from", snap.playerId, "self=", playerId, "hasRig=", !!snap.rig);
       if (!snap.rig || snap.playerId === playerId) return;
       usePoseStore.getState().setRig(REMOTE_PLAYER_ID, snap.rig);
     },

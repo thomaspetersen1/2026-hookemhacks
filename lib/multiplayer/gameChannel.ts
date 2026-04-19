@@ -30,6 +30,10 @@ export class GameChannel {
     this.playerId = playerId;
     this.playerName = playerName;
     this.onlineAt = new Date().toISOString();
+    // DEBUG(multiplayer-broadcast-flakiness): logs every channel construction
+    // so we can correlate with Fast-Refresh remounts / stale-channel drops.
+    // Remove once the broadcast-drops-on-deploy issue is root-caused.
+    console.log("[GC] new", { roomId, playerId, playerName });
     this.channel = supabase.channel(`room:${roomId}`, {
       config: {
         broadcast: { self: false, ack: false }, // ack:false = fire-and-forget for lowest latency
@@ -126,7 +130,12 @@ export class GameChannel {
     }
 
     return new Promise((resolve, reject) => {
-      this.channel.subscribe(async (status) => {
+      this.channel.subscribe(async (status, err) => {
+        // DEBUG(multiplayer-broadcast-flakiness): logs SUBSCRIBED /
+        // CHANNEL_ERROR / TIMED_OUT / CLOSED transitions. When the user
+        // reports broadcasts dropping, check here first — a silent CLOSED
+        // followed by no reconnect would explain lost messages.
+        console.log("[GC] status", status, err ?? "");
         if (status === "SUBSCRIBED") {
           this.ready = false;
           await this.trackPresence();
@@ -189,7 +198,7 @@ export class GameChannel {
   broadcastPoseSnapshot(
     snapshot: Omit<PoseSnapshot, "playerId" | "timestamp">,
   ): void {
-    this.channel.send({
+    const res = this.channel.send({
       type: "broadcast",
       event: "pose",
       payload: {
@@ -198,6 +207,20 @@ export class GameChannel {
         timestamp: performance.now(),
       } satisfies PoseSnapshot,
     });
+    // DEBUG(multiplayer-broadcast-flakiness): channel.send returns a
+    // promise resolving to 'ok' / 'timed out' / 'rate limited'. We log the
+    // first 3 sends + every 60th so the console shows whether the sender
+    // side is healthy when the receiver reports nothing. `__poseSendCount`
+    // is also useful to grep from the live console.
+    if (res && typeof (res as Promise<unknown>).then === "function") {
+      (res as Promise<unknown>).then((r) => {
+        const w = window as unknown as { __poseSendCount?: number };
+        w.__poseSendCount = (w.__poseSendCount ?? 0) + 1;
+        if (w.__poseSendCount <= 3 || w.__poseSendCount % 60 === 0) {
+          console.log("[GC] pose send #", w.__poseSendCount, "result", r);
+        }
+      }).catch((e) => console.warn("[GC] pose send err", e));
+    }
   }
 
   unsubscribe(): void {

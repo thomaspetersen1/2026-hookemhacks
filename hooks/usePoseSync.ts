@@ -23,8 +23,14 @@ export interface UsePoseSyncOptions {
 
 export function usePoseSync({ selfId, broadcast, enabled = true }: UsePoseSyncOptions) {
   const lastSendMs = useRef(0);
+  const sendCount = useRef(0);
 
   useEffect(() => {
+    // DEBUG(multiplayer-broadcast-flakiness): logs every transition of the
+    // `enabled` gate (driven by `connected && !!roomUuid` in the game page).
+    // If this flips to false mid-match, broadcasts stop — so this is the
+    // first place to check when the opponent avatar freezes.
+    console.log("[pose-sync] enabled=", enabled);
     if (!enabled) return;
     const interval = 1000 / BROADCAST_HZ;
 
@@ -37,6 +43,14 @@ export function usePoseSync({ selfId, broadcast, enabled = true }: UsePoseSyncOp
       if (!rig?.pose || Object.keys(rig.pose).length === 0) return;
 
       lastSendMs.current = now;
+      sendCount.current++;
+      // DEBUG(multiplayer-broadcast-flakiness): log the 1st broadcast and
+      // every 24th (~2s at 12 Hz) so we can see the local sender is alive
+      // without spamming the console. `sendCount` staying at 0 = CV pipeline
+      // isn't producing a rig (camera / BodyDetector issue, not realtime).
+      if (sendCount.current === 1 || sendCount.current % 24 === 0) {
+        console.log("[pose-sync] broadcast #", sendCount.current, "bones=", Object.keys(rig.pose).length);
+      }
       broadcast({ rig });
     });
 
