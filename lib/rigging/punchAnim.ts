@@ -109,3 +109,46 @@ export function applyPunchKeyframe(
   lower.rotation.y = 0;
   lower.rotation.z = 0;
 }
+
+/**
+ * Rising uppercut. Arm loads low-and-tucked, then drives up-and-forward with
+ * the forearm extending on the way. Ends with the fist above the head rather
+ * than pointing at it straight-on, which is what separates an uppercut from a
+ * jab/cross visually.
+ *
+ * `extension ∈ [0, 1]` drives the whole curl: 0 = loaded/tucked, 1 = peak.
+ * Uses fixed local-space angles (no aim) because the motion's character lives
+ * in the swing arc itself, not a world-space target.
+ */
+export function applyUppercutKeyframe(
+  bones: AvatarBones,
+  side: "left" | "right",
+  extension: number,
+): void {
+  const { upper: upperName, lower: lowerName } = SIDES[side];
+  const upper = bones[upperName];
+  const lower = bones[lowerName];
+  if (!upper || !lower) return;
+
+  const e = Math.max(0, Math.min(1, extension));
+  const zSign = side === "left" ? -1 : 1;
+
+  // Start: tucked-low loaded pose — upper arm hangs slightly forward with the
+  // elbow angled out, forearm folded up tight (fist near the cheek).
+  const START_UPPER_X = -Math.PI * 0.18;
+  const START_UPPER_Z = zSign * (Math.PI / 8);
+  const START_LOWER_X = -Math.PI * 0.78;
+
+  // Peak: arm swung up-and-forward well past horizontal, elbow mostly straight.
+  // Keeps a tiny bend (~18°) so the arm reads as thrown rather than locked.
+  const END_UPPER_X = -Math.PI * 0.82;
+  const END_UPPER_Z = 0;
+  const END_LOWER_X = -Math.PI * 0.1;
+
+  upper.rotation.x = lerp(START_UPPER_X, END_UPPER_X, e);
+  upper.rotation.z = lerp(START_UPPER_Z, END_UPPER_Z, e);
+  upper.rotation.y = 0;
+  lower.rotation.x = lerp(START_LOWER_X, END_LOWER_X, e);
+  lower.rotation.y = 0;
+  lower.rotation.z = 0;
+}
