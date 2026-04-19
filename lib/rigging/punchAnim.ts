@@ -141,13 +141,16 @@ export function applyUppercutKeyframe(
 
   // Peak: arm swung up-and-forward well past horizontal, elbow mostly straight.
   // Keeps a tiny bend (~18°) so the arm reads as thrown rather than locked.
+  // Negative zSign on END_UPPER_Z + inward END_UPPER_Y cross the arm toward
+  // the opponent's chin instead of going straight up.
   const END_UPPER_X = -Math.PI * 0.82;
-  const END_UPPER_Z = 0;
+  const END_UPPER_Z = -zSign * Math.PI * 0.15;
+  const END_UPPER_Y = -zSign * Math.PI * 0.28;
   const END_LOWER_X = -Math.PI * 0.1;
 
   upper.rotation.x = lerp(START_UPPER_X, END_UPPER_X, e);
   upper.rotation.z = lerp(START_UPPER_Z, END_UPPER_Z, e);
-  upper.rotation.y = 0;
+  upper.rotation.y = lerp(0, END_UPPER_Y, e);
   lower.rotation.x = lerp(START_LOWER_X, END_LOWER_X, e);
   lower.rotation.y = 0;
   lower.rotation.z = 0;
