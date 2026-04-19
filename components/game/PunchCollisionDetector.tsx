@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { getAvatarBones, registeredPlayerIds } from "./avatarCollision";
 import { usePoseStore } from "@/lib/store/poseStore";
+import { useGameStore } from "@/lib/store/gameStore";
 import {
   EXTEND_MS,
   HIT_EXTENSION_THRESHOLD,
@@ -39,6 +40,12 @@ export function PunchCollisionDetector() {
   const consumedRef = useRef<Set<number>>(new Set());
 
   useFrame(() => {
+    // Freeze combat once anyone has been KO'd. Results overlay covers the
+    // scene but avatars keep animating underneath — skipping the hit loop
+    // stops new damage/broadcasts until the match is reset or rematched.
+    const players = useGameStore.getState().players;
+    if (players.some((p) => p.hp <= 0)) return;
+
     const poseState = usePoseStore.getState().players;
     const ids = registeredPlayerIds();
 
