@@ -13,9 +13,15 @@ import { useRecorder } from "@/lib/recorder";
 import type { ChunkReady } from "@/lib/recorder";
 import Link from "next/link";
 
+type ChunkStatus = "idle" | "uploading" | "embedding" | "ready" | "error";
+
 type ChunkEntry = {
   chunk: ChunkReady;
   url: string;
+  clipId?: string;
+  caption?: string;
+  status: ChunkStatus;
+  errorMsg?: string;
 };
 
 function RecorderTestPanel() {
@@ -37,7 +43,7 @@ function RecorderTestPanel() {
     console.log(
       `[recorder-test] chunk ${chunk.chunkIndex} — ${chunk.durationMs}ms — ${(chunk.blob.size / 1024).toFixed(0)} KB — ${url}`,
     );
-    setEntries((prev) => [...prev, { chunk, url }]);
+    setEntries((prev) => [...prev, { chunk, url, status: "idle" }]);
   }, []);
 
   const { state, error, start, stop } = useRecorder(
@@ -46,8 +52,50 @@ function RecorderTestPanel() {
     handleChunk,
   );
 
-  const matchId = "recorder-test";
+  const matchId: string | null = null;
   const playerId = "dev";
+
+  const uploadAndEmbed = useCallback(async (entry: ChunkEntry) => {
+    const idx = entry.chunk.chunkIndex;
+
+    const patch = (update: Partial<ChunkEntry>) =>
+      setEntries((prev) =>
+        prev.map((e) => (e.chunk.chunkIndex === idx ? { ...e, ...update } : e))
+      );
+
+    patch({ status: "uploading", errorMsg: undefined });
+
+    try {
+      const form = new FormData();
+      form.append("chunk", entry.chunk.blob, `${idx}.webm`);
+      form.append("meta", JSON.stringify({
+        matchId,
+        playerId,
+        chunkIndex: idx,
+        startedAt: entry.chunk.startedAt,
+        durationMs: entry.chunk.durationMs,
+        rollup: { counts: {} },
+      }));
+
+      const upRes = await fetch("/api/clips/upload", { method: "POST", body: form });
+      const upJson = await upRes.json();
+      if (!upRes.ok) throw new Error(upJson.error ?? "upload failed");
+
+      patch({ status: "embedding", clipId: upJson.clipId });
+
+      const embRes = await fetch("/api/dev/process-clip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clipId: upJson.clipId }),
+      });
+      const embJson = await embRes.json();
+      if (!embRes.ok) throw new Error(embJson.error ?? "embedding failed");
+
+      patch({ status: "ready", caption: embJson.caption });
+    } catch (err) {
+      patch({ status: "error", errorMsg: err instanceof Error ? err.message : String(err) });
+    }
+  }, []);
 
   return (
     <div
@@ -171,7 +219,7 @@ function RecorderTestPanel() {
           <div style={{ display: "flex", gap: 8 }}>
             <button
               type="button"
-              onClick={() => start(matchId, playerId)}
+              onClick={() => start(matchId ?? "", playerId)}
               disabled={state !== "idle" || !stream}
               style={btnStyle(state === "idle" && !!stream, "start")}
             >
@@ -211,48 +259,85 @@ function RecorderTestPanel() {
           </div>
         )}
 
-        {entries.map(({ chunk, url }) => (
-          <div
-            key={chunk.chunkIndex}
-            style={{
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 10,
-              padding: 14,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-              <span style={{ color: "#2e7d5b", fontWeight: 700, fontSize: 13 }}>
-                #{chunk.chunkIndex}
-              </span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
-                {(chunk.durationMs / 1000).toFixed(2)} s
-              </span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
-                {(chunk.blob.size / 1024).toFixed(0)} KB
-              </span>
-              <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>
-                started {new Date(chunk.startedAt).toLocaleTimeString()}
-              </span>
-            </div>
-
-            {/* Inline playback — this is the critical test for standalone-playability */}
-            <video
-              src={url}
-              controls
+        {entries.map((entry) => {
+          const { chunk, url, status, caption, errorMsg } = entry;
+          const busy = status === "uploading" || status === "embedding";
+          return (
+            <div
+              key={chunk.chunkIndex}
               style={{
-                width: "100%",
-                borderRadius: 6,
-                background: "#000",
-                maxHeight: 180,
+                background: "rgba(255,255,255,0.03)",
+                border: `1px solid ${status === "ready" ? "rgba(46,125,91,0.4)" : status === "error" ? "rgba(255,61,31,0.3)" : "rgba(255,255,255,0.07)"}`,
+                borderRadius: 10,
+                padding: 14,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                flexShrink: 0,
               }}
-            />
-          </div>
-        ))}
+            >
+              <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <span style={{ color: "#2e7d5b", fontWeight: 700, fontSize: 13 }}>
+                  #{chunk.chunkIndex}
+                </span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
+                  {(chunk.durationMs / 1000).toFixed(2)} s
+                </span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>
+                  {(chunk.blob.size / 1024).toFixed(0)} KB
+                </span>
+                <span style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", marginLeft: "auto" }}>
+                  started {new Date(chunk.startedAt).toLocaleTimeString()}
+                </span>
+              </div>
+
+              <video
+                src={url}
+                controls
+                style={{ width: "100%", borderRadius: 6, background: "#000", maxHeight: 180 }}
+              />
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => uploadAndEmbed(entry)}
+                  disabled={busy || status === "ready"}
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    border: "none",
+                    fontSize: 11,
+                    fontFamily: "monospace",
+                    fontWeight: 700,
+                    cursor: busy || status === "ready" ? "not-allowed" : "pointer",
+                    opacity: busy || status === "ready" ? 0.45 : 1,
+                    background: "#2e7d5b",
+                    color: "#fff",
+                  }}
+                >
+                  {status === "uploading" ? "Uploading…" : status === "embedding" ? "Embedding…" : status === "ready" ? "Done ✓" : "Upload + Embed"}
+                </button>
+                {status === "error" && (
+                  <span style={{ fontSize: 11, color: "#ff3d1f" }}>{errorMsg}</span>
+                )}
+              </div>
+
+              {caption && (
+                <div style={{
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.6)",
+                  background: "rgba(255,255,255,0.04)",
+                  borderRadius: 6,
+                  padding: "8px 12px",
+                  lineHeight: 1.5,
+                }}>
+                  <span style={{ color: "#9c82c0", marginRight: 6 }}>caption:</span>
+                  {caption}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <style>{`

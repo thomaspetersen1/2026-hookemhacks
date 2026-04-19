@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
   const { data, error: insErr } = await supabase
     .from("clips")
     .insert({
-      match_id: meta.matchId,
+      match_id: meta.matchId ?? null,
       player_id: meta.playerId,
       chunk_index: meta.chunkIndex,
       storage_path: path,
