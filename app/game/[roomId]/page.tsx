@@ -15,6 +15,8 @@ import { useGameStore } from "@/lib/store/gameStore";
 import { usePoseStore } from "@/lib/store/poseStore";
 import { useRemoteGuardStore } from "@/lib/store/remoteGuardStore";
 import { setHitBroadcaster } from "@/lib/multiplayer/hitBroadcaster";
+import { useCalibrationSignalStore } from "@/lib/store/calibrationSignalStore";
+import { loadStoredTint } from "@/lib/game/avatarColors";
 import { REMOTE_PLAYER_ID, SELF_PLAYER_ID } from "@/types";
 
 type GameStep = "calibrate" | "game";
@@ -35,6 +37,7 @@ export default function GamePage() {
   const setHostId = useGameStore((s) => s.setHostId);
   const setPlayerConnected = useGameStore((s) => s.setPlayerConnected);
   const setPlayerName = useGameStore((s) => s.setPlayerName);
+  const setPlayerTint = useGameStore((s) => s.setPlayerTint);
   const selfHp = useGameStore(
     (s) => s.players.find((p) => p.id === SELF_PLAYER_ID)?.hp ?? 100,
   );
@@ -42,6 +45,15 @@ export default function GamePage() {
     (s) => s.players.find((p) => p.id === REMOTE_PLAYER_ID)?.hp ?? 100,
   );
   const [outcome, setOutcome] = useState<"self" | "remote" | null>(null);
+  // Peer has broadcast guard_ready — their calibration is done. Gates
+  // GameLoadingOverlay's waiting-peer → done transition so one side can't
+  // start boxing while the other is still in their 3-2-1 countdown.
+  const [peerGuardReady, setPeerGuardReady] = useState(false);
+  // Tracks whether *we've* broadcast our own guard_ready this match. Used to
+  // (a) fire exactly once from the overlay's onSelfGuardReady, and (b)
+  // re-broadcast when a peer joins presence after we're already locked in
+  // (covers refresh/reconnect cases).
+  const selfGuardReadyRef = useRef(false);
 
   // Fresh match on page mount — clear any stale HP / outcome from a previous
   // match so the HP→outcome effect below doesn't instantly flash Results when
@@ -65,7 +77,7 @@ export default function GamePage() {
     };
   }, [code, setHostId]);
 
-  const { broadcastGameEvent, broadcastHit, broadcastPoseSnapshot, connected, players, peerBroadcastSeen } = useGameChannel({
+  const { broadcastGameEvent, broadcastHit, broadcastPoseSnapshot, connected, players, peerBroadcastSeen, setTint } = useGameChannel({
     roomId: roomUuid ?? "",
     playerId,
     playerName: playerName || playerId,
@@ -73,9 +85,19 @@ export default function GamePage() {
       if (e.type === "game_end") router.push(`/lobby/${code}`);
       else if (e.type === "rematch") {
         useGameStore.getState().reset();
+        useCalibrationSignalStore.getState().requestRecalibrate();
         setOutcome(null);
         // Remount IngestionBridge → new matches row for this rematch.
         setMatchKey((k) => k + 1);
+        // Rearm the guard-ready gate for round N+1. Without this, both sides
+        // enter rematch with peerGuardReady=true carried over from round N,
+        // and the waiting-peer phase dismisses instantly — sync lost.
+        setPeerGuardReady(false);
+        selfGuardReadyRef.current = false;
+      } else if (e.type === "guard_ready") {
+        // GameChannel.broadcastGameEvent uses self:false, so any guard_ready
+        // we receive is by definition the peer's.
+        setPeerGuardReady(true);
       }
     },
     onHit: (hit) => {
@@ -165,6 +187,29 @@ export default function GamePage() {
     if (peer?.name) setPlayerName(REMOTE_PLAYER_ID, peer.name);
   }, [players, playerId, setPlayerName]);
 
+  // Seed self tint from the lobby choice (localStorage) on mount so the
+  // avatar reflects it even before presence has a chance to sync.
+  useEffect(() => {
+    const stored = loadStoredTint();
+    if (stored) setPlayerTint(SELF_PLAYER_ID, stored);
+  }, [setPlayerTint]);
+
+  // Push self tint up to presence when the channel connects so a direct
+  // /game entry (skipping lobby) still carries the preference.
+  useEffect(() => {
+    if (!connected) return;
+    const stored = loadStoredTint();
+    if (stored) setTint(stored);
+  }, [connected, setTint]);
+
+  // Mirror presence tints into gameStore for both sides — self + peer.
+  useEffect(() => {
+    const self = players.find((p) => p.playerId === playerId);
+    if (self?.tint) setPlayerTint(SELF_PLAYER_ID, self.tint);
+    const peer = players.find((p) => p.playerId !== playerId);
+    if (peer?.tint) setPlayerTint(REMOTE_PLAYER_ID, peer.tint);
+  }, [players, playerId, setPlayerTint]);
+
   const remotePeer = players.find((p) => p.playerId !== playerId);
   const winnerName =
     outcome === "self"
@@ -210,11 +255,35 @@ export default function GamePage() {
 
   const onPlayAgain = useCallback(() => {
     useGameStore.getState().reset();
+    useCalibrationSignalStore.getState().requestRecalibrate();
     broadcastGameEvent({ type: "rematch", payload: {} });
     setOutcome(null);
     // Mirrors the remote-side handler so the host also rolls a new match row.
     setMatchKey((k) => k + 1);
+    // Rearm the guard-ready gate locally (peer side rearms in its rematch
+    // handler). Overlay resets via its own recalTick effect.
+    setPeerGuardReady(false);
+    selfGuardReadyRef.current = false;
   }, [broadcastGameEvent]);
+
+  // Overlay calls this once when local baseline capture lands. Broadcasts
+  // guard_ready so the peer's waiting-peer phase can dismiss. Ref-guarded so
+  // double-invocation (StrictMode, React re-entry) doesn't double-broadcast.
+  const handleSelfGuardReady = useCallback(() => {
+    if (selfGuardReadyRef.current) return;
+    selfGuardReadyRef.current = true;
+    broadcastGameEvent({ type: "guard_ready", payload: {} });
+  }, [broadcastGameEvent]);
+
+  // Re-broadcast guard_ready whenever a peer newly appears in presence after
+  // we've already locked in. Covers the "peer refreshed their tab / joined
+  // late" case — broadcasts are ephemeral, so a peer who wasn't subscribed
+  // when we first fired would otherwise never learn we're ready.
+  useEffect(() => {
+    if (!hasPeerPresence) return;
+    if (!selfGuardReadyRef.current) return;
+    broadcastGameEvent({ type: "guard_ready", payload: {} });
+  }, [hasPeerPresence, broadcastGameEvent]);
   const ready =
     peerBroadcastSeen ||
     (connected && (soloTimedOut || presenceTimedOut));
@@ -267,6 +336,8 @@ export default function GamePage() {
           matchKey={matchKey}
           matchOver={outcome !== null}
           onMatchIdChange={onMatchIdChange}
+          peerGuardReady={peerGuardReady}
+          onSelfGuardReady={handleSelfGuardReady}
         />
       )}
 

@@ -7,11 +7,13 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import BodyDetector from "@/components/detection/BodyDetector";
 import { CVRigBridge } from "@/components/detection/CVRigBridge";
-import { ArmRigSim } from "@/components/game/ArmRigSim";
 import { HPBars } from "@/components/game/HPBars";
 import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel";
+import { GuardVignette } from "@/components/detection/GuardVignette";
 import { usePunchDetector } from "@/hooks/usePunchDetector";
 import { useArmSimDriver } from "@/hooks/useArmSimDriver";
+import { useCameraStore } from "@/lib/store/cameraStore";
+import { useViewSettingsStore } from "@/lib/store/viewSettingsStore";
 import { REMOTE_PLAYER_ID, SELF_PLAYER_ID } from "@/types";
 
 const GameCanvas = dynamic(
@@ -43,7 +45,7 @@ export default function WorldPage() {
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={debugPanel} />
         <HPBars />
-        <ArmRigSim />
+        <GuardVignette />
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-500">
           world · CV driven{debug ? " · feed bottom-right" : ""}
         </div>
@@ -76,6 +78,9 @@ function PunchDebugLayer({
     onPunch,
     onRelease,
   });
+  const requestCameraReset = useCameraStore((s) => s.requestReset);
+  const hideLocalBody = useViewSettingsStore((s) => s.hideLocalBody);
+  const toggleHideLocalBody = useViewSettingsStore((s) => s.toggleHideLocalBody);
 
   return (
     <>
@@ -96,6 +101,9 @@ function PunchDebugLayer({
           onCalibrate={onCalibrate}
           onResetCounts={onResetCounts}
           onClose={onCloseDebug}
+          onResetCamera={requestCameraReset}
+          hideLocalBody={hideLocalBody}
+          onToggleHideLocalBody={toggleHideLocalBody}
         />
       )}
     </>

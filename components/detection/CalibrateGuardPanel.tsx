@@ -21,6 +21,14 @@ export type CalibrateGuardPanelProps = {
   onResetCounts: () => void;
   variant?: "full" | "overlay";
   onClose?: () => void;
+  /** When provided, renders a "Reset camera" button that snaps the 3D POV
+   *  back to P1's head. Only pages with a GameCanvas pass this in. */
+  onResetCamera?: () => void;
+  /** Current state of the "hide local body" first-person toggle. */
+  hideLocalBody?: boolean;
+  /** When provided with hideLocalBody, renders a toggle that hides the
+   *  local avatar's torso/head/legs, leaving only arms + fists. */
+  onToggleHideLocalBody?: () => void;
 };
 
 export function CalibrateGuardPanel({
@@ -28,6 +36,9 @@ export function CalibrateGuardPanel({
   onResetCounts,
   variant = "full",
   onClose,
+  onResetCamera,
+  hideLocalBody,
+  onToggleHideLocalBody,
 }: CalibrateGuardPanelProps) {
   const pending = usePunchCalibrationStore((s) => s.pending);
   const active = usePunchCalibrationStore((s) => s.active);
@@ -43,6 +54,7 @@ export function CalibrateGuardPanel({
   const rightMetrics = usePunchCalibrationStore((s) => s.rightMetrics);
   const setPending = usePunchCalibrationStore((s) => s.setPending);
   const applyPending = usePunchCalibrationStore((s) => s.applyPending);
+  const setBaseline = usePunchCalibrationStore((s) => s.setBaseline);
 
   const calibratedLeft = !!baseline?.left;
   const calibratedRight = !!baseline?.right;
@@ -60,7 +72,7 @@ export function CalibrateGuardPanel({
 
   const onDefaults = () => {
     setPending({
-      size: 3.5,
+      size: 3,
       rotation: 0,
       velocity: 0,
       guard: 0.1,
@@ -108,6 +120,15 @@ export function CalibrateGuardPanel({
                   .filter(Boolean)
                   .join(" + ")}. Press again to re-capture any visible hand.`
               : "Hold your guard, then press. Any visible hand is captured."}
+          {anyCalibrated && countdown === null && (
+            <button
+              type="button"
+              onClick={() => setBaseline(null)}
+              className="mt-1 block text-[10px] uppercase tracking-[0.3em] text-rose-400/80 underline-offset-2 hover:text-rose-300 hover:underline"
+            >
+              Clear lock
+            </button>
+          )}
           {calibrateMsg && (
             <div className="mt-1 text-rose-400">{calibrateMsg}</div>
           )}
@@ -192,6 +213,31 @@ export function CalibrateGuardPanel({
           Reset HP
         </button>
       </div>
+
+      {onResetCamera && (
+        <button
+          type="button"
+          onClick={onResetCamera}
+          className="rounded-md border border-sky-500/60 bg-sky-500/10 px-3 py-2 text-xs font-semibold uppercase tracking-widest text-sky-200 hover:bg-sky-500/20"
+        >
+          Reset camera · P1 POV
+        </button>
+      )}
+
+      {onToggleHideLocalBody && (
+        <button
+          type="button"
+          onClick={onToggleHideLocalBody}
+          aria-pressed={!!hideLocalBody}
+          className={`rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-widest transition ${
+            hideLocalBody
+              ? "border border-violet-400/70 bg-violet-500/20 text-violet-100 hover:bg-violet-500/30"
+              : "border border-zinc-700 bg-zinc-800/60 text-zinc-300 hover:bg-zinc-800"
+          }`}
+        >
+          {hideLocalBody ? "Show my body" : "Hide my body · arms only"}
+        </button>
+      )}
 
       <div className="rounded-md border border-zinc-800 bg-black/50 p-3 font-mono text-[11px] leading-relaxed text-zinc-400">
         <div className="mb-1 text-[10px] uppercase tracking-widest text-zinc-500">

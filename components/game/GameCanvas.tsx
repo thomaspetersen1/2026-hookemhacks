@@ -1,16 +1,16 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useThree } from "@react-three/fiber";
 import { Environment, Html, OrbitControls, Stats } from "@react-three/drei";
-import { Suspense } from "react";
+import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
+import { Suspense, useEffect, useMemo, useRef } from "react";
 import { AvatarCollisionResolver } from "./avatarCollision";
 import { FallingBalls } from "./FallingBalls";
 import { World } from "./World";
 import { Avatar, AVATAR_SCALE, type AvatarComponent } from "./Avatar";
-import { RedBoxer } from "./RedBoxer";
-import { BlueBoxer } from "./BlueBoxer";
 import { useGameStore } from "@/lib/store/gameStore";
-import { useIdentity } from "@/hooks/useIdentity";
+import { useCameraStore } from "@/lib/store/cameraStore";
+import { useViewSettingsStore } from "@/lib/store/viewSettingsStore";
 import { PLAYER_SLOTS } from "@/lib/game/sportLayout";
 
 interface GameCanvasProps {
@@ -29,21 +29,43 @@ interface GameCanvasProps {
 export function GameCanvas({ debug = false, AvatarComponent = Avatar }: GameCanvasProps) {
   const sport = useGameStore((s) => s.sport);
   const players = useGameStore((s) => s.players);
-  const hostId = useGameStore((s) => s.hostId);
-  const { playerId: localId } = useIdentity();
   const slots = PLAYER_SLOTS[sport];
 
-  // Host = red boxer, joiner = blue. Fallback while hostId is still loading:
-  // treat the local player as the host so avatars render immediately. Worst
-  // case is a one-frame color flip once the room lookup resolves.
-  const isLocalHost = !hostId || localId === hostId;
+  // First-person-ish POV: spawn camera just behind P1's head, pulled back
+  // along the P2→P1 axis so the local avatar's silhouette reads at the
+  // edges of view (not jammed right against the forehead). Target = P2's
+  // head. Memoed so CameraController doesn't trigger a reset every render.
+  const selfSlot = slots[0];
+  const oppSlot = slots[1];
+  const CAMERA_PULLBACK = 2.2; // meters behind P1's head along P1↔P2 axis
+  const CAMERA_LIFT = 0.35; // meters up from the head center
+  const selfHead = useMemo<[number, number, number]>(() => {
+    const dx = selfSlot.position[0] - oppSlot.position[0];
+    const dz = selfSlot.position[2] - oppSlot.position[2];
+    const dist = Math.hypot(dx, dz) || 1;
+    return [
+      selfSlot.position[0] + (dx / dist) * CAMERA_PULLBACK,
+      selfSlot.position[1] + 1.74 * AVATAR_SCALE + CAMERA_LIFT,
+      selfSlot.position[2] + (dz / dist) * CAMERA_PULLBACK,
+    ];
+  }, [selfSlot, oppSlot]);
+  const oppHead = useMemo<[number, number, number]>(
+    () => [
+      oppSlot.position[0],
+      oppSlot.position[1] + 1.74 * AVATAR_SCALE,
+      oppSlot.position[2],
+    ],
+    [oppSlot],
+  );
+  const controlsRef = useRef<OrbitControlsImpl | null>(null);
+  const hideLocalBody = useViewSettingsStore((s) => s.hideLocalBody);
 
   return (
     <Canvas
       shadows="percentage"
       dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance" }}
-      camera={{ position: [0, 3.5, 7.5], fov: 42, near: 0.1, far: 100 }}
+      camera={{ position: selfHead, fov: 42, near: 0.1, far: 100 }}
       style={{ background: "#FF9764" }}
     >
       {/* Warm peach haze — softens the distant ocean/volcano and matches
@@ -56,11 +78,6 @@ export function GameCanvas({ debug = false, AvatarComponent = Avatar }: GameCanv
         {players.map((p, i) => {
           const slot = slots[i];
           if (!slot) return null;
-          let BoxerComponent: AvatarComponent = AvatarComponent;
-          if (sport === "boxing") {
-            const isRed = p.isLocal ? isLocalHost : !isLocalHost;
-            BoxerComponent = isRed ? RedBoxer : BlueBoxer;
-          }
           // Opponent aim point — head sphere center in world space.
           //   HIPS_Y + SPINE_LEN + CHEST_LEN + NECK_LEN + (HEAD_LEN/2 − 0.02)
           //   = 1.0 + 0.2 + 0.25 + 0.1 + 0.09 ≈ 1.74
@@ -70,12 +87,13 @@ export function GameCanvas({ debug = false, AvatarComponent = Avatar }: GameCanv
             ? [opp.position[0], opp.position[1] + 1.74 * AVATAR_SCALE, opp.position[2]]
             : undefined;
           return (
-            <BoxerComponent
+            <AvatarComponent
               key={p.id}
               playerId={p.id}
               position={slot.position}
               rotationY={slot.rotationY}
               opponentHeadPos={opponentHeadPos}
+              hideBody={p.isLocal && hideLocalBody}
             />
           );
         })}
@@ -86,11 +104,17 @@ export function GameCanvas({ debug = false, AvatarComponent = Avatar }: GameCanv
       </Suspense>
 
       <OrbitControls
+        ref={controlsRef}
         enablePan={false}
         maxPolarAngle={Math.PI / 2 - 0.05}
-        minDistance={3}
+        minDistance={0.5}
         maxDistance={12}
-        target={[0, 1.0, -2.5]}
+        target={oppHead}
+      />
+      <CameraController
+        selfHead={selfHead}
+        oppHead={oppHead}
+        controlsRef={controlsRef}
       />
       {debug && (
         <>
@@ -169,6 +193,28 @@ function AxisLabels() {
       {tickEls}
     </>
   );
+}
+
+function CameraController({
+  selfHead,
+  oppHead,
+  controlsRef,
+}: {
+  selfHead: [number, number, number];
+  oppHead: [number, number, number];
+  controlsRef: React.RefObject<OrbitControlsImpl | null>;
+}) {
+  const { camera } = useThree();
+  const resetTick = useCameraStore((s) => s.resetTick);
+  useEffect(() => {
+    camera.position.set(selfHead[0], selfHead[1], selfHead[2]);
+    const ctrl = controlsRef.current;
+    if (ctrl) {
+      ctrl.target.set(oppHead[0], oppHead[1], oppHead[2]);
+      ctrl.update();
+    }
+  }, [resetTick, camera, selfHead, oppHead, controlsRef]);
+  return null;
 }
 
 function Lights() {
