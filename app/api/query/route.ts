@@ -6,10 +6,13 @@ export const maxDuration = 30;
 export async function POST(req: Request) {
   const { question, playerId, sessionStart } = await req.json();
   if (!question) return Response.json({ error: "question required" }, { status: 400 });
+  if (!playerId || typeof playerId !== "string") {
+    return Response.json({ error: "playerId required" }, { status: 400 });
+  }
 
   let raw: unknown;
   try {
-    raw = await geminiPlan(question, { playerId, sessionStart });
+    raw = await geminiPlan(question, { sessionStart });
   } catch (err) {
     console.error("[query] planner error", err);
     return Response.json({ error: "planner failed" }, { status: 500 });
@@ -21,7 +24,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await dispatch(parsed.data);
+    const result = await dispatch(parsed.data, playerId);
     return Response.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "dispatch failed";
