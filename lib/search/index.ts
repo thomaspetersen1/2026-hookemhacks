@@ -28,7 +28,7 @@ const AggregatePlanSchema = z.object({
   filters: FilterSchema,
   groupBy: z.enum(["match", "event_type", "day"]).optional(),
   orderBy: z
-    .enum(["metric_desc", "metric_asc", "duration_desc", "combo_desc", "recent"])
+    .enum(["metric_desc", "metric_asc", "duration_desc", "recent"])
     .optional(),
   limit: z.number().optional(),
 });
@@ -85,7 +85,7 @@ Shape picker:
 - "aggregate": counts / totals / averages / rankings over matches or match events.
   target=match_events for per-action counts, target=match_summaries for per-match rollups.
   orderBy options on match_summaries: metric_desc/asc (by punch total), duration_desc
-  (longest match), combo_desc (best combo), recent (most recent).
+  (longest match), recent (most recent).
 - "retrieve": find clips matching exact structured criteria (event type + min count + time).
 - "hybrid": clips matching a fuzzy descriptor ("amazing", "sloppy", "wild") combined
   with structured filters.
@@ -114,9 +114,6 @@ A: {"kind":"hybrid","filters":{"eventType":"punch","minCount":3},"semanticQuery"
 
 Q: "What was my longest match?"
 A: {"kind":"aggregate","metric":"max","target":"match_summaries","filters":{},"orderBy":"duration_desc","limit":1}
-
-Q: "What was my best combo?"
-A: {"kind":"aggregate","metric":"max","target":"match_summaries","filters":{},"orderBy":"combo_desc","limit":1}
 
 Q: "Show me my recent matches."
 A: {"kind":"aggregate","metric":"count","target":"match_summaries","filters":{},"orderBy":"recent","limit":5}
@@ -218,9 +215,6 @@ async function runAggregate(
         break;
       case "duration_desc":
         q = q.order("duration_ms", { ascending: false });
-        break;
-      case "combo_desc":
-        q = q.order("best_combo_len", { ascending: false, nullsFirst: false });
         break;
       case "recent":
       default:
