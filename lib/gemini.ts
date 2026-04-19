@@ -4,6 +4,9 @@ import { GoogleGenAI } from "@google/genai";
 // Credentials (gcloud auth application-default login locally, service account
 // in prod), bills against the GCP project's credits. Falls back to AI Studio
 // with GEMINI_API_KEY when the Vertex env isn't configured.
+//
+// Vertex supports `gemini-embedding-2-preview` at 1536 dim with video input,
+// so embeddings stay compatible with existing rows in `clips.embedding`.
 export const gemini = process.env.GOOGLE_CLOUD_PROJECT
   ? new GoogleGenAI({
       vertexai: true,
