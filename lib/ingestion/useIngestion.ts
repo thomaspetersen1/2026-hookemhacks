@@ -9,11 +9,14 @@ export interface IngestionOptions {
   roomId: string;
   playerId: string;
   stream: MediaStream | null;
+  /** Gate the match-start effect. Defaults true; pass false to defer creation
+   *  of the matches row (and therefore recording) until e.g. combat begins. */
+  enabled?: boolean;
   drainEvents?: () => ActionEvent[];
   getChunkRollup?: () => Record<string, number>;
 }
 
-export function useIngestion({ roomId, playerId, stream, drainEvents, getChunkRollup }: IngestionOptions) {
+export function useIngestion({ roomId, playerId, stream, enabled = true, drainEvents, getChunkRollup }: IngestionOptions) {
   const [matchId, setMatchId] = useState<string | null>(null);
   // Keep matchId in a ref so callbacks always see the latest value without
   // needing to be re-created when the state updates.
@@ -21,7 +24,7 @@ export function useIngestion({ roomId, playerId, stream, drainEvents, getChunkRo
 
   // Start a match row in Postgres on mount; end it on unmount.
   useEffect(() => {
-    if (!roomId || !playerId) return;
+    if (!enabled || !roomId || !playerId) return;
 
     let cancelled = false;
 
@@ -51,7 +54,7 @@ export function useIngestion({ roomId, playerId, stream, drainEvents, getChunkRo
         }).catch(() => {});
       }
     };
-  }, [roomId, playerId]);
+  }, [roomId, playerId, enabled]);
 
   const handleChunk = useCallback(
     async (chunk: ChunkReady) => {

@@ -8,9 +8,10 @@ import { useEventTracker } from "@/lib/ingestion/useEventTracker";
 interface Props {
   roomId: string;
   playerId: string;
+  combatStarted: boolean;
 }
 
-export function IngestionBridge({ roomId, playerId }: Props) {
+export function IngestionBridge({ roomId, playerId, combatStarted }: Props) {
   const { videoRef, isReady, leftHandLandmarks, rightHandLandmarks } = useBodyDetection();
   const tracker = useEventTracker();
   const calibratedRef = useRef(false);
@@ -37,6 +38,7 @@ export function IngestionBridge({ roomId, playerId }: Props) {
     roomId,
     playerId,
     stream,
+    enabled: combatStarted,
     drainEvents: tracker.drainEvents,
     getChunkRollup: tracker.rollChunk,
   });
