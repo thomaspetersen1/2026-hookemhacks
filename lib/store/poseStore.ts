@@ -19,8 +19,12 @@ import { SELF_PLAYER_ID, REMOTE_PLAYER_ID } from "@/types";
  *   2. RECOVER: begins when the detector sees the fist drop back to guard
  *      and stamps `releasedAt`. Lasts RECOVER_MS, then Avatar clears.
  */
+export type PunchKind = "straight" | "uppercut";
+
 export interface PunchAnim {
   side: "left" | "right";
+  /** "straight" = jab/cross (default), "uppercut" = rising arc punch. */
+  kind: PunchKind;
   startedAt: number; // performance.now()
   releasedAt: number | null;
 }
@@ -50,6 +54,7 @@ interface PoseStore {
   setPunchAnim: (
     playerId: PlayerId,
     side: "left" | "right",
+    kind?: PunchKind,
   ) => void;
   markPunchReleased: (playerId: PlayerId, side: "left" | "right") => void;
   clearPunchAnim: (playerId: PlayerId) => void;
@@ -85,7 +90,7 @@ export const usePoseStore = create<PoseStore>((set) => ({
         },
       },
     })),
-  setPunchAnim: (playerId, side) =>
+  setPunchAnim: (playerId, side, kind = "straight") =>
     set((s) => ({
       players: {
         ...s.players,
@@ -93,6 +98,7 @@ export const usePoseStore = create<PoseStore>((set) => ({
           ...(s.players[playerId] ?? emptyPose()),
           punchAnim: {
             side,
+            kind,
             startedAt: performance.now(),
             releasedAt: null,
           },

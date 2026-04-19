@@ -10,7 +10,7 @@ import { usePoseStore } from "@/lib/store/poseStore";
 import { useGameStore } from "@/lib/store/gameStore";
 import { applyRigRotations, type AvatarBones } from "@/lib/rigging";
 import { registerAvatarBody, registerAvatarBones } from "./avatarCollision";
-import { applyPunchKeyframe, aimUpperArm } from "@/lib/rigging/punchAnim";
+import { applyPunchKeyframe, applyUppercutKeyframe, aimUpperArm } from "@/lib/rigging/punchAnim";
 import { EXTEND_MS, RECOVER_MS } from "@/lib/combat/damage";
 import { useArmSimStore } from "@/lib/store/armSimStore";
 
@@ -293,7 +293,11 @@ export function Avatar({
         );
         target = opponentHeadVec.current;
       }
-      applyPunchKeyframe(bones.current, punch.side, extension, target);
+      if (punch.kind === "uppercut") {
+        applyUppercutKeyframe(bones.current, punch.side, extension);
+      } else {
+        applyPunchKeyframe(bones.current, punch.side, extension, target);
+      }
       if (clearAfter) usePoseStore.getState().clearPunchAnim(playerId);
     }
   });

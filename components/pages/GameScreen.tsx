@@ -8,6 +8,7 @@ import { IngestionBridge } from "@/components/detection/IngestionBridge";
 import { HPBars } from "@/components/game/HPBars";
 import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel";
 import { GuardVignette } from "@/components/detection/GuardVignette";
+import { UppercutChargeIndicator } from "@/components/detection/UppercutChargeIndicator";
 import { GameLoadingOverlay } from "@/components/pages/GameLoadingOverlay";
 import { usePunchDetector } from "@/hooks/usePunchDetector";
 import { useArmSimDriver } from "@/hooks/useArmSimDriver";
@@ -90,6 +91,7 @@ export function GameScreen({
         <GameCanvas debug={debugPanel} />
         <HPBars />
         <GuardVignette />
+        <UppercutChargeIndicator />
         <PunchDebugLayer
           debugPanel={debugPanel}
           onToggleDebug={() => setDebugPanel((v) => !v)}

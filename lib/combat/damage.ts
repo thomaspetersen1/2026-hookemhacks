@@ -27,6 +27,12 @@ export const CALORIES_PER_PUNCH = 10;
  *  detector thresholds, if the UI feels off. */
 export const PUNCH_COUNT_DISPLAY_MULTIPLIER = 2.5;
 
+/** Damage applied on a charged uppercut hit, before guard mitigation. */
+export const UPPERCUT_DAMAGE_BASE = 35;
+
+/** How long (ms) the fist holds at peak extension before retracting on an uppercut. */
+export const UPPERCUT_HOLD_MS = 180;
+
 // ─── Mitigation ──────────────────────────────────────────────────────────────
 
 /** Multiplier applied to damage when the target is in guard (0..1). 0.5 = 50% mitigation. */

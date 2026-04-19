@@ -10,11 +10,14 @@ import { CVRigBridge } from "@/components/detection/CVRigBridge";
 import { HPBars } from "@/components/game/HPBars";
 import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel";
 import { GuardVignette } from "@/components/detection/GuardVignette";
+import { UppercutChargeIndicator } from "@/components/detection/UppercutChargeIndicator";
 import { usePunchDetector } from "@/hooks/usePunchDetector";
 import { useArmSimDriver } from "@/hooks/useArmSimDriver";
 import { useCameraStore } from "@/lib/store/cameraStore";
 import { useViewSettingsStore } from "@/lib/store/viewSettingsStore";
 import { useSoundStore } from "@/lib/store/soundStore";
+import { usePoseStore } from "@/lib/store/poseStore";
+import { EXTEND_MS } from "@/lib/combat/damage";
 import { REMOTE_PLAYER_ID, SELF_PLAYER_ID } from "@/types";
 
 const GameCanvas = dynamic(
@@ -47,6 +50,7 @@ export default function WorldPage() {
         <GameCanvas debug={debugPanel} />
         <HPBars />
         <GuardVignette />
+        <UppercutChargeIndicator />
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-500">
           world · CV driven{debug ? " · feed bottom-right" : ""}
         </div>
@@ -55,8 +59,32 @@ export default function WorldPage() {
           onToggleDebug={() => setDebugPanel((v) => !v)}
           onCloseDebug={() => setDebugPanel(false)}
         />
+        <UppercutTestButton />
       </div>
     </BodyDetector>
+  );
+}
+
+function UppercutTestButton() {
+  // Fires an uppercut animation on the local avatar's right arm. Since /world
+  // has no CV-driven release to stamp `releasedAt`, we fake it on a timer so
+  // the arm holds at peak briefly then retracts, then the animation clears.
+  const triggerUppercut = () => {
+    usePoseStore.getState().setPunchAnim(SELF_PLAYER_ID, "right", "uppercut");
+    const HOLD_MS = 180;
+    setTimeout(() => {
+      usePoseStore.getState().markPunchReleased(SELF_PLAYER_ID, "right");
+    }, EXTEND_MS + HOLD_MS);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={triggerUppercut}
+      className="absolute bottom-6 left-1/2 z-10 -translate-x-1/2 rounded-md border border-amber-500/60 bg-amber-500/10 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.3em] text-amber-200 transition hover:bg-amber-500/20"
+    >
+      ⬆ Uppercut
+    </button>
   );
 }
 
