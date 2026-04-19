@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import type { Group } from "three";
 import type { HumanoidBoneName, PlayerId } from "@/types";
 import { usePoseStore } from "@/lib/store/poseStore";
 import { useGameStore } from "@/lib/store/gameStore";
 import { applyRigRotations, type AvatarBones } from "@/lib/rigging";
+import { registerAvatarBody } from "./avatarCollision";
 
 // Rigged placeholder avatar — structured so Track 1's Kalidokit + VRM swap is
 // a drop-in. Every joint is its own <group> positioned at the joint's pivot;
@@ -94,6 +95,17 @@ export function Avatar({
   const player = useGameStore((s) => s.players.find((p) => p.id === playerId));
   const tint = tintOverride ?? player?.tint ?? "#f97316";
 
+  // Register root in the collision resolver. The separator in
+  // AvatarCollisionResolver reads these groups each frame and nudges their
+  // positions apart when two avatars overlap horizontally.
+  const rootRefCb = useCallback(
+    (el: Group | null) => {
+      root.current = el;
+      registerAvatarBody(playerId, el);
+    },
+    [playerId],
+  );
+
   const phaseOffset = useRef(hashPlayerIdToPhase(playerId)).current;
 
   useFrame((state) => {
@@ -144,7 +156,7 @@ export function Avatar({
   });
 
   return (
-    <group ref={root} position={position} rotation={[0, rotationY, 0]}>
+    <group ref={rootRefCb} position={position} rotation={[0, rotationY, 0]}>
       {/* Root transform → Hips pivot */}
       <group ref={bind("Hips")} position={[0, HIPS_Y, 0]}>
         {/* Pelvis visual (centered on hips) */}

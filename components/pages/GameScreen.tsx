@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import BodyDetector from "@/components/detection/BodyDetector";
 import { CVRigBridge } from "@/components/detection/CVRigBridge";
+import { DropBallButton } from "@/components/game/DropBallButton";
+import { HPBars } from "@/components/game/HPBars";
 import { SELF_PLAYER_ID } from "@/types";
 
 // Full-screen 3D arena — same layout as /world, but mounted inside the
@@ -36,6 +38,8 @@ export function GameScreen({ onEnd: _onEnd }: GameScreenProps) {
       <CVRigBridge playerId={SELF_PLAYER_ID} />
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={false} />
+        <HPBars />
+        <DropBallButton />
       </div>
     </BodyDetector>
   );
