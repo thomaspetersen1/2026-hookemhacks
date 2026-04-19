@@ -178,7 +178,7 @@ export function useBodyDetectionProvider(
     if (acc.active) {
       if (leftHandRaw?.fistSize !== undefined) acc.leftSamples.push(leftHandRaw.fistSize);
       if (rightHandRaw?.fistSize !== undefined) acc.rightSamples.push(rightHandRaw.fistSize);
-      if (timestamp - acc.startTime >= 1500) {
+      if (timestamp - acc.startTime >= 5000) {
         acc.active = false;
         const avg = (s: number[]) => s.length > 0 ? s.reduce((a, b) => a + b, 0) / s.length : 0;
         fistCalibrationRef.current = {
@@ -192,6 +192,7 @@ export function useBodyDetectionProvider(
     const punchEvents: PunchEvent[] = [];
     const leftBaseline = fistCalibrationRef.current.left;
     const rightBaseline = fistCalibrationRef.current.right;
+
     if (leftHandRaw?.fistSize !== undefined && leftBaseline) {
       const ev = detectPunchEvent(leftHandRaw.fistSize, leftBaseline.baselineFistSize, punchStateRef.current.left, timestamp, "left");
       if (ev) punchEvents.push(ev);

@@ -58,7 +58,7 @@ export function CalibrationPanel({ onReady }: CalibrationPanelProps) {
     setFistProgress(0);
     const start = Date.now();
     const id = setInterval(() => {
-      const pct = Math.min(100, ((Date.now() - start) / 1500) * 100);
+      const pct = Math.min(100, ((Date.now() - start) / 5000) * 100);
       setFistProgress(pct);
       if (pct >= 100) { clearInterval(id); setPhase("done"); }
     }, 50);

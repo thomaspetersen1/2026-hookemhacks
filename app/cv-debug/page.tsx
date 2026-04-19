@@ -88,6 +88,11 @@ function HandBlock({
           <span className={`tabular-nums font-bold ${ratio !== null && ratio >= 1.5 ? "text-red-400" : "text-zinc-100"}`}>
             {ratio !== null ? toFixed(ratio, 3) : "—"}
           </span>
+
+          <span className="text-zinc-500">punching</span>
+          <span className={hand.isPunching ? "text-red-400 font-bold" : "text-zinc-500"}>
+            {hand.isPunching ? "YES — tracking…" : "no"}
+          </span>
         </div>
       ) : (
         <div className="font-mono text-sm text-zinc-500">(not detected)</div>
@@ -108,7 +113,7 @@ function CVPanel() {
     if (!isFistCalibrating) { setCalProgress(0); return; }
     const start = Date.now();
     const id = setInterval(() => {
-      const p = Math.min(100, ((Date.now() - start) / 1500) * 100);
+      const p = Math.min(100, ((Date.now() - start) / 5000) * 100);
       setCalProgress(p);
       if (p >= 100) clearInterval(id);
     }, 50);
