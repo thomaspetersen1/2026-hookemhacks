@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useBodyDetection } from "@/hooks/useBodyDetection";
+import { useCalibrationSignalStore } from "@/lib/store/calibrationSignalStore";
 import { usePunchCalibrationStore } from "@/lib/store/punchCalibrationStore";
 import { sampleHand } from "@/lib/detection/punch";
 import type { PoseLandmark } from "@/types";
@@ -75,6 +76,21 @@ export function GameLoadingOverlay({
   // Guard against firing onSelfGuardReady more than once per mount — the
   // baseline-success effect below re-fires on every dep change.
   const selfGuardReadyFiredRef = useRef(false);
+
+  // Rematch trigger: re-enter the calibration flow when the external
+  // calibrationSignalStore tick bumps. Skips the initial tick value so the
+  // first mount goes through the normal "connecting → guard-leadin" path;
+  // only later bumps (rematch / requestRecalibrate) re-arm the overlay.
+  const recalTick = useCalibrationSignalStore((s) => s.requestTick);
+  const lastHandledRecalTickRef = useRef(recalTick);
+  useEffect(() => {
+    if (recalTick === lastHandledRecalTickRef.current) return;
+    lastHandledRecalTickRef.current = recalTick;
+    selfGuardReadyFiredRef.current = false;
+    setRetryCount(0);
+    setAttemptId((n) => n + 1);
+    setPhase("guard-leadin");
+  }, [recalTick]);
 
   // Landmarks are kept in a ref so capture() doesn't close over stale state.
   const latestHandsRef = useRef<{

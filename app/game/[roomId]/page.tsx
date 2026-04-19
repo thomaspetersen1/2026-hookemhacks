@@ -75,6 +75,11 @@ export default function GamePage() {
         useGameStore.getState().reset();
         useCalibrationSignalStore.getState().requestRecalibrate();
         setOutcome(null);
+        // Rearm the guard-ready gate for round N+1. Without this, both sides
+        // enter rematch with peerGuardReady=true carried over from round N,
+        // and the waiting-peer phase dismisses instantly — sync lost.
+        setPeerGuardReady(false);
+        selfGuardReadyRef.current = false;
       } else if (e.type === "guard_ready") {
         // GameChannel.broadcastGameEvent uses self:false, so any guard_ready
         // we receive is by definition the peer's.
@@ -182,6 +187,10 @@ export default function GamePage() {
     useCalibrationSignalStore.getState().requestRecalibrate();
     broadcastGameEvent({ type: "rematch", payload: {} });
     setOutcome(null);
+    // Rearm the guard-ready gate locally (peer side rearms in its rematch
+    // handler). Overlay resets via its own recalTick effect.
+    setPeerGuardReady(false);
+    selfGuardReadyRef.current = false;
   }, [broadcastGameEvent]);
 
   // Overlay calls this once when local baseline capture lands. Broadcasts
