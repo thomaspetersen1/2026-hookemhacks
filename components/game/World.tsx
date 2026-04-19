@@ -8,6 +8,8 @@ import { SwordArena } from "./props/SwordArena";
 import { TennisCourt } from "./props/TennisCourt";
 import { GolfGreen } from "./props/GolfGreen";
 import { BoxingRing } from "./props/BoxingRing";
+import { PirateShip } from "./props/PirateShip";
+import { Cove } from "./props/Cove";
 
 // Tropical-sunset arena — matches the landing-UI aesthetic (volcano, ocean,
 // palms, warm sky) instead of the old neon concrete arena. Sport props still
@@ -25,6 +27,7 @@ const COLOR_VOLCANO = "#3A2E4C";
 const COLOR_VOLCANO_DEEP = "#261E35";
 const COLOR_OCEAN = "#1F4C6B";
 const COLOR_OCEAN_LIGHT = "#3A7C9C";
+const COLOR_FOAM = "#E6DFD0";
 const COLOR_PALM_TRUNK = "#5A3E2A";
 const COLOR_FROND = "#2E6E3B";
 
@@ -68,13 +71,19 @@ function ArenaShell() {
       {/* Main volcano — a truncated cone centered-back with lava glow at the
           crater, per the landing backdrop */}
       <Volcano position={[2, 0, -22]} height={10} baseRadius={7} />
-      {/* Smaller background volcano for depth */}
-      <Volcano
-        position={[-9, 0, -26]}
-        height={6}
-        baseRadius={4.5}
-        color={COLOR_VOLCANO_DEEP}
-        hasLava={false}
+
+      {/* Left cove — volcano mountain with a rocky inlet that opens toward
+          the pirate ship, replacing the plain background mountain */}
+      <Cove position={[-9, 0, -18]} />
+
+      {/* Cove off to the right — rocky inlet with its own volcano */}
+      <Cove position={[17, 0, -19]} />
+
+      {/* Pirate ship sailing the open water, mid-left — kept clear of both
+          volcanoes' silhouettes and parked where the deep ocean is visible */}
+      <PirateShip
+        position={[-7, 0.35, -12]}
+        rotation={[0, Math.PI * 0.22, 0]}
       />
 
       {/* Palm trees lining the beach on both sides */}
@@ -86,16 +95,31 @@ function ArenaShell() {
 
 function Ocean() {
   const ref = useRef<Mesh>(null);
+  const foamA = useRef<Mesh>(null);
+  const foamB = useRef<Mesh>(null);
+  const foamC = useRef<Mesh>(null);
   useFrame((state) => {
-    if (!ref.current) return;
-    // Gentle horizontal drift for subtle water motion
     const t = state.clock.elapsedTime;
-    ref.current.position.x = Math.sin(t * 0.18) * 0.6;
+    // Gentle horizontal drift for subtle water motion
+    if (ref.current) {
+      ref.current.position.x = Math.sin(t * 0.18) * 0.6;
+    }
+    // Each foam strip drifts on its own sine so the ocean feels alive
+    if (foamA.current) {
+      foamA.current.position.x = Math.sin(t * 0.22) * 1.4;
+    }
+    if (foamB.current) {
+      foamB.current.position.x = Math.cos(t * 0.16 + 0.8) * 1.8;
+    }
+    if (foamC.current) {
+      foamC.current.position.x = Math.sin(t * 0.12 + 2.1) * 1.2;
+    }
   });
   return (
     <group>
-      {/* Deep ocean (far) */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, -18]}>
+      {/* Deep ocean (far) — raised just above the sand plane so the blue
+          actually shows instead of being hidden beneath it */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, -18]}>
         <planeGeometry args={[120, 18]} />
         <meshStandardMaterial color={COLOR_OCEAN} roughness={0.6} metalness={0.3} />
       </mesh>
@@ -112,6 +136,46 @@ function Ocean() {
           opacity={0.75}
           roughness={0.4}
           metalness={0.4}
+        />
+      </mesh>
+      {/* Foam/wave strips at staggered depths, each drifting independently */}
+      <mesh
+        ref={foamA}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.02, -13.5]}
+      >
+        <planeGeometry args={[80, 0.28]} />
+        <meshStandardMaterial
+          color={COLOR_FOAM}
+          transparent
+          opacity={0.38}
+          roughness={0.5}
+        />
+      </mesh>
+      <mesh
+        ref={foamB}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.015, -16.5]}
+      >
+        <planeGeometry args={[90, 0.22]} />
+        <meshStandardMaterial
+          color={COLOR_FOAM}
+          transparent
+          opacity={0.32}
+          roughness={0.5}
+        />
+      </mesh>
+      <mesh
+        ref={foamC}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.012, -20]}
+      >
+        <planeGeometry args={[100, 0.26]} />
+        <meshStandardMaterial
+          color={COLOR_FOAM}
+          transparent
+          opacity={0.28}
+          roughness={0.5}
         />
       </mesh>
     </group>
@@ -180,8 +244,10 @@ function Volcano({
   const topRadius = baseRadius * 0.25;
   return (
     <group position={position}>
+      {/* Truncated cone so the top is a flat crater the lava disc can sit in,
+          instead of tapering to a sharp point that hides the glow */}
       <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
-        <coneGeometry args={[baseRadius, height, 20, 1, true]} />
+        <cylinderGeometry args={[topRadius, baseRadius, height, 20, 1, true]} />
         <meshStandardMaterial color={color} roughness={0.95} />
       </mesh>
       {hasLava && (
