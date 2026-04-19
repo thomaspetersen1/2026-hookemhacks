@@ -49,6 +49,12 @@ export function useGameChannel({
   useEffect(() => { onGameEventRef.current = onGameEvent; }, [onGameEvent]);
   useEffect(() => { onPoseSnapshotRef.current = onPoseSnapshot; }, [onPoseSnapshot]);
 
+  // Once-per-mount flag: fires a single `reconnect()` the first time we see
+  // any peer arrive in presence. Empirically, the "alone at subscribe" path
+  // leaves broadcast listeners wedged; a fresh subscribe after the peer has
+  // joined fixes it. Ref (not state) so toggling it doesn't cause a re-render.
+  const hasKickedRef = useRef(false);
+
   useEffect(() => {
     if (!roomId || !playerId) return;
 
@@ -56,6 +62,7 @@ export function useGameChannel({
     // channel can emit CHANNEL_ERROR as it's torn down mid-connect; `cancelled`
     // lets us ignore that noise and only react to the final channel.
     let cancelled = false;
+    hasKickedRef.current = false;
     const channel = new GameChannel(roomId, playerId, playerName);
     channelRef.current = channel;
 
@@ -84,6 +91,20 @@ export function useGameChannel({
       setConnected(false);
     };
   }, [roomId, playerId, playerName]);
+
+  // Auto-kick: when a peer first appears in presence, do a one-shot
+  // reconnect on this client. 600ms delay lets the peer's subscribe settle
+  // before we recreate — without it both sides thrash each other.
+  useEffect(() => {
+    if (hasKickedRef.current || !connected) return;
+    const hasPeer = players.some((p) => p.playerId !== playerId);
+    if (!hasPeer) return;
+    hasKickedRef.current = true;
+    const t = setTimeout(() => {
+      void channelRef.current?.reconnect();
+    }, 600);
+    return () => clearTimeout(t);
+  }, [connected, players, playerId]);
 
   const broadcastPlayerState = useCallback(
     (state: Omit<PlayerState, "playerId" | "timestamp">) => {
