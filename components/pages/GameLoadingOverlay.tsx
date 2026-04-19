@@ -90,6 +90,11 @@ export function GameLoadingOverlay({
     setRetryCount(0);
     setAttemptId((n) => n + 1);
     setPhase("guard-leadin");
+    // Wipe the prior-round baseline before the new countdown starts. Without
+    // this, the guard-hold baseline-check effect fires immediately on entry
+    // (baseline still truthy from round N) and flashes straight to
+    // guard-done, skipping the 3-2-1.
+    usePunchCalibrationStore.getState().setBaseline(null);
   }, [recalTick]);
 
   // Landmarks are kept in a ref so capture() doesn't close over stale state.
