@@ -222,9 +222,17 @@ async function runAggregate(
     }
     if (p.filters.since) q = q.gte("created_at", p.filters.since);
     if (p.filters.until) q = q.lte("created_at", p.filters.until);
-    q = q.limit(p.limit ?? 5);
+    const limit = p.limit ?? 5;
+    q = q.limit(limit);
     const { data, error } = await q;
     if (error) throw error;
+
+    if (p.orderBy === "duration_desc" && limit === 1) {
+      const top = data?.[0] as { duration_ms?: number } | undefined;
+      if (!top) return { answer: "No finished matches yet." };
+      return { answer: `Your longest match lasted ${formatDuration(top.duration_ms ?? 0)}.` };
+    }
+
     return { matches: data };
   }
 
@@ -311,6 +319,14 @@ async function runPlayerRecord(
   }
   const pct = Math.round((wins / decided) * 100);
   return { answer: `You win ${pct}% of your matches.`, count: pct };
+}
+
+function formatDuration(ms: number): string {
+  const totalSec = Math.round(ms / 1000);
+  if (totalSec < 60) return `${totalSec}s`;
+  const mins = Math.floor(totalSec / 60);
+  const secs = totalSec % 60;
+  return secs === 0 ? `${mins}m` : `${mins}m ${secs}s`;
 }
 
 type ClipRow = { storage_path: string; [key: string]: unknown };
