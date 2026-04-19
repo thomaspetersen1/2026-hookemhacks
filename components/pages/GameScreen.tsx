@@ -11,7 +11,9 @@ import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel"
 import { GameLoadingOverlay } from "@/components/pages/GameLoadingOverlay";
 import { usePunchDetector } from "@/hooks/usePunchDetector";
 import { usePoseStore } from "@/lib/store/poseStore";
-import { SELF_PLAYER_ID } from "@/types";
+import { applyDamage, PUNCH_DAMAGE_BASE } from "@/lib/combat/damage";
+import { broadcastHit } from "@/lib/multiplayer/hitBroadcaster";
+import { SELF_PLAYER_ID, REMOTE_PLAYER_ID } from "@/types";
 
 // Full-screen 3D arena — same layout as /world, but mounted inside the
 // room-scoped /game/[roomId] route so the multiplayer channel + host-based
@@ -89,6 +91,8 @@ function PunchDebugLayer({
   const onPunch = useCallback((side: "left" | "right") => {
     const mirrored = side === "left" ? "right" : "left";
     usePoseStore.getState().setPunchAnim(SELF_PLAYER_ID, mirrored);
+    const { amount } = applyDamage(REMOTE_PLAYER_ID, PUNCH_DAMAGE_BASE);
+    broadcastHit({ attackerId: SELF_PLAYER_ID, targetId: REMOTE_PLAYER_ID, damage: amount });
   }, []);
   const onRelease = useCallback((side: "left" | "right") => {
     const mirrored = side === "left" ? "right" : "left";
