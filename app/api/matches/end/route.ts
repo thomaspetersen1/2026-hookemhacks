@@ -47,9 +47,24 @@ export async function POST(req: NextRequest) {
 
   const wasFirstClose = (closed?.length ?? 0) > 0;
 
-  // Derive loserId from match_events when only winnerId was supplied — the
-  // winning client can't always see the peer's playerId through channel
-  // presence at KO, so the server resolves the other participant.
+  // Bump winner record immediately on first close — independent of whether we
+  // can resolve the loser. A loser with zero match_events (quick KO, no
+  // detected punches) must not block the winner's career update.
+  if (wasFirstClose && winnerId) {
+    const { error: wErr } = await supabase.rpc("bump_player_record", {
+      p_player_id: winnerId,
+      p_won: true,
+    });
+    if (wErr) console.error("bump winner record failed", winnerId, wErr.message);
+  }
+
+  // Resolve loserId in priority order:
+  //  1. Client-supplied hint (winning tab has it via channel presence).
+  //  2. match_events — reliable when the loser threw at least one detected
+  //     punch that got flushed.
+  //  3. room_players via matches.room_id — durable source of truth, doesn't
+  //     depend on in-match telemetry. This is the one that catches the
+  //     "loser never swung" case.
   let loserId = bodyLoserId;
   if (wasFirstClose && winnerId && !loserId) {
     const { data: others } = await supabase
@@ -60,13 +75,28 @@ export async function POST(req: NextRequest) {
       .limit(1);
     loserId = others?.[0]?.player_id ?? undefined;
   }
+  if (wasFirstClose && winnerId && !loserId) {
+    const { data: matchRow } = await supabase
+      .from("matches")
+      .select("room_id")
+      .eq("id", matchId)
+      .maybeSingle();
+    if (matchRow?.room_id) {
+      const { data: peers } = await supabase
+        .from("room_players")
+        .select("player_id")
+        .eq("room_id", matchRow.room_id)
+        .neq("player_id", winnerId)
+        .limit(1);
+      loserId = peers?.[0]?.player_id ?? undefined;
+    }
+  }
 
   if (wasFirstClose && winnerId && loserId && winnerId !== loserId) {
-    const [{ error: wErr }, { error: lErr }] = await Promise.all([
-      supabase.rpc("bump_player_record", { p_player_id: winnerId, p_won: true }),
-      supabase.rpc("bump_player_record", { p_player_id: loserId, p_won: false }),
-    ]);
-    if (wErr) console.error("bump winner record failed", winnerId, wErr.message);
+    const { error: lErr } = await supabase.rpc("bump_player_record", {
+      p_player_id: loserId,
+      p_won: false,
+    });
     if (lErr) console.error("bump loser record failed", loserId, lErr.message);
   }
 

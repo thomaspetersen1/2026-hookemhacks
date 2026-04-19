@@ -178,8 +178,9 @@ export default function GamePage() {
   // When HP hits 0: lock the outcome. Only the winning side POSTs — it's the
   // only side that reliably knows its own playerId without depending on peer
   // presence (which can be missing at KO if channel presence just dropped).
-  // The API derives the loser from match_events. endedMatchesRef keyed on
-  // activeMatchId prevents duplicate POSTs as the effect re-runs.
+  // We pass the peer's playerId as a hint when presence is available; the
+  // server falls through to match_events / room_players otherwise.
+  // endedMatchesRef keyed on activeMatchId prevents duplicate POSTs.
   useEffect(() => {
     if (selfHp > 0 && remoteHp > 0) return;
     const selfWon = remoteHp <= 0;
@@ -188,14 +189,20 @@ export default function GamePage() {
     if (!activeMatchId || !playerId) return;
     if (endedMatchesRef.current.has(activeMatchId)) return;
     endedMatchesRef.current.add(activeMatchId);
+    const peer = players.find((p) => p.playerId !== playerId);
+    const body: { matchId: string; winnerId: string; loserId?: string } = {
+      matchId: activeMatchId,
+      winnerId: playerId,
+    };
+    if (peer?.playerId) body.loserId = peer.playerId;
     fetch("/api/matches/end", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ matchId: activeMatchId, winnerId: playerId }),
+      body: JSON.stringify(body),
     }).catch(() => {
       endedMatchesRef.current.delete(activeMatchId);
     });
-  }, [selfHp, remoteHp, activeMatchId, playerId]);
+  }, [selfHp, remoteHp, activeMatchId, playerId, players]);
 
   const onMatchIdChange = useCallback((id: string | null) => {
     setActiveMatchId(id);
