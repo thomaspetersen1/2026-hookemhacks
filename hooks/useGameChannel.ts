@@ -111,10 +111,6 @@ export function useGameChannel({
 
     return () => {
       cancelled = true;
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current);
-        fallbackTimerRef.current = null;
-      }
       channel.unsubscribe();
       setConnected(false);
     };
