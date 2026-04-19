@@ -46,6 +46,12 @@ export interface AvatarProps {
    * straight forward in avatar-local space.
    */
   opponentHeadPos?: [number, number, number];
+  /**
+   * When true, hide everything except the arms + fists (torso, head, legs,
+   * nameplate). Paired with a first-person camera POV. Bones remain in the
+   * scene graph so rigging continues to update — only visibility flips.
+   */
+  hideBody?: boolean;
 }
 
 export type AvatarComponent = (props: AvatarProps) => React.ReactElement | null;
@@ -96,6 +102,7 @@ export function Avatar({
   rotationY = 0,
   tintOverride,
   opponentHeadPos,
+  hideBody = false,
 }: AvatarProps) {
   const root = useRef<Group>(null);
   const bones = useRef<AvatarBones>({});
@@ -299,26 +306,30 @@ export function Avatar({
       {/* Root transform → Hips pivot */}
       <group ref={bind("Hips")} position={[0, HIPS_Y, 0]}>
         {/* Pelvis visual (centered on hips) */}
-        <mesh castShadow>
+        <mesh castShadow visible={!hideBody}>
           <boxGeometry args={[TORSO_W * 0.9, 0.2, TORSO_D]} />
           <meshStandardMaterial color={tint} roughness={0.55} />
         </mesh>
 
         {/* Spine chain: Hips → Spine → Chest → Neck → Head */}
         <group ref={bind("Spine")} position={[0, 0.1, 0]}>
-          <mesh position={[0, SPINE_LEN / 2, 0]} castShadow>
+          <mesh position={[0, SPINE_LEN / 2, 0]} castShadow visible={!hideBody}>
             <boxGeometry args={[TORSO_W * 0.82, SPINE_LEN, TORSO_D * 0.9]} />
             <meshStandardMaterial color={tint} roughness={0.55} />
           </mesh>
 
           <group ref={bind("Chest")} position={[0, SPINE_LEN, 0]}>
-            <mesh position={[0, CHEST_LEN / 2, 0]} castShadow>
+            <mesh position={[0, CHEST_LEN / 2, 0]} castShadow visible={!hideBody}>
               <boxGeometry args={[TORSO_W, CHEST_LEN, TORSO_D]} />
               <meshStandardMaterial color={tint} roughness={0.5} />
             </mesh>
 
             {/* Neck + head */}
-            <group ref={bind("Neck")} position={[0, CHEST_LEN, 0]}>
+            <group
+              ref={bind("Neck")}
+              position={[0, CHEST_LEN, 0]}
+              visible={!hideBody}
+            >
               <mesh position={[0, NECK_LEN / 2, 0]} castShadow>
                 <cylinderGeometry args={[0.07, 0.08, NECK_LEN, 12]} />
                 <meshStandardMaterial color={tint} roughness={0.5} />
@@ -402,7 +413,11 @@ export function Avatar({
         </group>
 
         {/* --- Legs (siblings of Spine, children of Hips) -------------- */}
-        <group ref={bind("LeftUpperLeg")} position={[-HIP_OFFSET_X, 0, 0]}>
+        <group
+          ref={bind("LeftUpperLeg")}
+          position={[-HIP_OFFSET_X, 0, 0]}
+          visible={!hideBody}
+        >
           <mesh position={[0, -UPPER_LEG_LEN / 2, 0]} castShadow>
             <boxGeometry args={[LIMB_W * 1.2, UPPER_LEG_LEN, LIMB_W * 1.2]} />
             <meshStandardMaterial color="#1f2937" roughness={0.6} />
@@ -421,7 +436,11 @@ export function Avatar({
           </group>
         </group>
 
-        <group ref={bind("RightUpperLeg")} position={[HIP_OFFSET_X, 0, 0]}>
+        <group
+          ref={bind("RightUpperLeg")}
+          position={[HIP_OFFSET_X, 0, 0]}
+          visible={!hideBody}
+        >
           <mesh position={[0, -UPPER_LEG_LEN / 2, 0]} castShadow>
             <boxGeometry args={[LIMB_W * 1.2, UPPER_LEG_LEN, LIMB_W * 1.2]} />
             <meshStandardMaterial color="#1f2937" roughness={0.6} />
@@ -442,7 +461,7 @@ export function Avatar({
       </group>
 
       {/* nameplate — stays at a fixed world-space height regardless of rig */}
-      <NamePlate playerId={playerId} tint={tint} />
+      {!hideBody && <NamePlate playerId={playerId} tint={tint} />}
     </group>
   );
 }

@@ -7,9 +7,12 @@ import { CVRigBridge } from "@/components/detection/CVRigBridge";
 import { IngestionBridge } from "@/components/detection/IngestionBridge";
 import { HPBars } from "@/components/game/HPBars";
 import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel";
+import { GuardVignette } from "@/components/detection/GuardVignette";
 import { GameLoadingOverlay } from "@/components/pages/GameLoadingOverlay";
 import { usePunchDetector } from "@/hooks/usePunchDetector";
 import { useArmSimDriver } from "@/hooks/useArmSimDriver";
+import { useCameraStore } from "@/lib/store/cameraStore";
+import { useViewSettingsStore } from "@/lib/store/viewSettingsStore";
 import { SELF_PLAYER_ID, REMOTE_PLAYER_ID } from "@/types";
 
 // Full-screen 3D arena — same layout as /world, but mounted inside the
@@ -64,6 +67,7 @@ export function GameScreen({
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={debugPanel} />
         <HPBars />
+        <GuardVignette />
         <PunchDebugLayer
           debugPanel={debugPanel}
           onToggleDebug={() => setDebugPanel((v) => !v)}
@@ -98,6 +102,9 @@ function PunchDebugLayer({
     onPunch,
     onRelease,
   });
+  const requestCameraReset = useCameraStore((s) => s.requestReset);
+  const hideLocalBody = useViewSettingsStore((s) => s.hideLocalBody);
+  const toggleHideLocalBody = useViewSettingsStore((s) => s.toggleHideLocalBody);
 
   return (
     <>
@@ -118,6 +125,9 @@ function PunchDebugLayer({
           onCalibrate={onCalibrate}
           onResetCounts={onResetCounts}
           onClose={onCloseDebug}
+          onResetCamera={requestCameraReset}
+          hideLocalBody={hideLocalBody}
+          onToggleHideLocalBody={toggleHideLocalBody}
         />
       )}
     </>

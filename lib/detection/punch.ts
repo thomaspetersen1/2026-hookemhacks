@@ -69,7 +69,7 @@ export const MIN_GUARD_MS = 500;
 export const UPPERCUT_SIZE_FACTOR = 0.6;
 
 export const DEFAULTS: Params = {
-  size: 3.5,
+  size: 3,
   rotation: 0,
   velocity: 0,
   guard: 0.1,
