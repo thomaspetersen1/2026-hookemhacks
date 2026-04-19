@@ -16,6 +16,19 @@ type GameEventHandler = (event: GameEvent) => void;
 type PoseSnapshotHandler = (snapshot: PoseSnapshot) => void;
 type PresenceHandler = (players: PlayerPresence[]) => void;
 
+interface SubscribeHandlers {
+  onPlayerState?: PlayerStateHandler;
+  onAttack?: AttackHandler;
+  onHit?: HitHandler;
+  onGameEvent?: GameEventHandler;
+  onPoseSnapshot?: PoseSnapshotHandler;
+  onPresenceChange?: PresenceHandler;
+}
+
+// Exponential backoff for reconnects. 500 ms → 1 s → 2 s → 4 s, capped at 8 s.
+const RECONNECT_BASE_MS = 500;
+const RECONNECT_MAX_MS = 8000;
+
 export class GameChannel {
   private channel: RealtimeChannel;
   private readonly roomId: string;
@@ -25,19 +38,31 @@ export class GameChannel {
   private readonly onlineAt: string;
   private ready = false;
 
+  // Reconnect bookkeeping. `handlers` is captured on the first subscribe() call
+  // and reused when we have to rebuild the channel after a drop. `destroyed`
+  // flips on unsubscribe() so we stop retrying after a real teardown.
+  private handlers: SubscribeHandlers | null = null;
+  private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private retryAttempt = 0;
+  private destroyed = false;
+
   constructor(roomId: string, playerId: string, playerName: string) {
     this.roomId = roomId;
     this.playerId = playerId;
     this.playerName = playerName;
     this.onlineAt = new Date().toISOString();
+    this.channel = this.createChannel();
+  }
+
+  private createChannel(): RealtimeChannel {
     // DEBUG(multiplayer-broadcast-flakiness): logs every channel construction
     // so we can correlate with Fast-Refresh remounts / stale-channel drops.
     // Remove once the broadcast-drops-on-deploy issue is root-caused.
-    console.log("[GC] new", { roomId, playerId, playerName });
-    this.channel = supabase.channel(`room:${roomId}`, {
+    console.log("[GC] new", { roomId: this.roomId, playerId: this.playerId });
+    return supabase.channel(`room:${this.roomId}`, {
       config: {
         broadcast: { self: false, ack: false }, // ack:false = fire-and-forget for lowest latency
-        presence: { key: playerId },
+        presence: { key: this.playerId },
       },
     });
   }
@@ -56,54 +81,49 @@ export class GameChannel {
     await this.trackPresence();
   }
 
-  subscribe(handlers: {
-    onPlayerState?: PlayerStateHandler;
-    onAttack?: AttackHandler;
-    onHit?: HitHandler;
-    onGameEvent?: GameEventHandler;
-    onPoseSnapshot?: PoseSnapshotHandler;
-    onPresenceChange?: PresenceHandler;
-  }): Promise<void> {
-    const {
-      onPlayerState,
-      onAttack,
-      onHit,
-      onGameEvent,
-      onPoseSnapshot,
-      onPresenceChange,
-    } = handlers;
+  subscribe(handlers: SubscribeHandlers): Promise<void> {
+    this.handlers = handlers;
+    this.bindHandlers();
+    return this.startSubscribe();
+  }
 
-    if (onPlayerState) {
+  /** Wire the stored handlers onto the current channel. Called on initial
+   * subscribe and on every reconnect after the channel is recreated. */
+  private bindHandlers(): void {
+    const h = this.handlers;
+    if (!h) return;
+
+    if (h.onPlayerState) {
       this.channel.on("broadcast", { event: "player_state" }, ({ payload }) =>
-        onPlayerState(payload as PlayerState)
+        h.onPlayerState!(payload as PlayerState),
       );
     }
 
-    if (onAttack) {
+    if (h.onAttack) {
       this.channel.on("broadcast", { event: "attack" }, ({ payload }) =>
-        onAttack(payload as AttackEvent)
+        h.onAttack!(payload as AttackEvent),
       );
     }
 
-    if (onHit) {
+    if (h.onHit) {
       this.channel.on("broadcast", { event: "hit" }, ({ payload }) =>
-        onHit(payload as HitEvent)
+        h.onHit!(payload as HitEvent),
       );
     }
 
-    if (onGameEvent) {
+    if (h.onGameEvent) {
       this.channel.on("broadcast", { event: "game_event" }, ({ payload }) =>
-        onGameEvent(payload as GameEvent)
+        h.onGameEvent!(payload as GameEvent),
       );
     }
 
-    if (onPoseSnapshot) {
+    if (h.onPoseSnapshot) {
       this.channel.on("broadcast", { event: "pose" }, ({ payload }) =>
-        onPoseSnapshot(payload as PoseSnapshot)
+        h.onPoseSnapshot!(payload as PoseSnapshot),
       );
     }
 
-    if (onPresenceChange) {
+    if (h.onPresenceChange) {
       this.channel.on("presence", { event: "sync" }, () => {
         const state = this.channel.presenceState<PlayerPresence>();
         // Presence stores one array per key (= per player). Multiple entries
@@ -125,26 +145,63 @@ export class GameChannel {
             ready: anyReady,
           });
         }
-        onPresenceChange(players);
+        h.onPresenceChange!(players);
       });
     }
+  }
 
+  /** Begin (or re-begin) a subscribe handshake on the current channel.
+   * Returns a promise that only resolves/rejects for the *first* attempt —
+   * later status transitions trigger the reconnect loop silently. */
+  private startSubscribe(): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false;
       this.channel.subscribe(async (status, err) => {
         // DEBUG(multiplayer-broadcast-flakiness): logs SUBSCRIBED /
-        // CHANNEL_ERROR / TIMED_OUT / CLOSED transitions. When the user
-        // reports broadcasts dropping, check here first — a silent CLOSED
-        // followed by no reconnect would explain lost messages.
+        // CHANNEL_ERROR / TIMED_OUT / CLOSED transitions. A post-SUBSCRIBED
+        // CLOSED or CHANNEL_ERROR now triggers an automatic reconnect via
+        // scheduleReconnect() below, so the old "broadcasts silently stop
+        // forever" behavior is gone — check the retry logs if pose stops.
         console.log("[GC] status", status, err ?? "");
         if (status === "SUBSCRIBED") {
           this.ready = false;
+          this.retryAttempt = 0;
           await this.trackPresence();
-          resolve();
-        } else if (status === "CHANNEL_ERROR") {
-          reject(new Error("Failed to connect to game channel"));
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        } else if (status === "CHANNEL_ERROR" || status === "CLOSED" || status === "TIMED_OUT") {
+          if (this.destroyed) return;
+          this.scheduleReconnect();
+          if (!settled) {
+            settled = true;
+            reject(new Error(`Channel ${status}`));
+          }
         }
       });
     });
+  }
+
+  /** Tear down the dead channel, build a new one, re-bind handlers, and
+   * retry subscribe after an exponential-backoff delay. Dedupes against
+   * multiple simultaneous status events (CLOSED often fires twice). */
+  private scheduleReconnect(): void {
+    if (this.retryTimer || this.destroyed) return;
+    const delay = Math.min(RECONNECT_BASE_MS * 2 ** this.retryAttempt, RECONNECT_MAX_MS);
+    this.retryAttempt++;
+    console.log("[GC] reconnect scheduled in", delay, "ms (attempt", this.retryAttempt, ")");
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      if (this.destroyed) return;
+      // removeChannel is safe on an already-dead channel; it just no-ops.
+      supabase.removeChannel(this.channel);
+      this.channel = this.createChannel();
+      this.bindHandlers();
+      // Any further status errors here are handled inside startSubscribe —
+      // the reject path re-schedules another attempt, so we can ignore.
+      void this.startSubscribe().catch(() => {});
+    }, delay);
   }
 
   broadcastPlayerState(state: Omit<PlayerState, "playerId" | "timestamp">): void {
@@ -224,6 +281,11 @@ export class GameChannel {
   }
 
   unsubscribe(): void {
+    this.destroyed = true;
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer);
+      this.retryTimer = null;
+    }
     supabase.removeChannel(this.channel);
   }
 }
