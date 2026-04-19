@@ -194,12 +194,18 @@ export function usePunchDetector(opts: {
       const rotMet = rotEnabled && rotDelta >= active.rotation;
       const velMet = velEnabled && velocity >= active.velocity;
 
-      const inGuard = base
+      const guardDist = base
         ? Math.hypot(
             sample.wristX - base.wristX,
             sample.wristY - base.wristY,
-          ) <= active.guard
-        : false;
+          )
+        : Infinity;
+      const inGuard = base ? guardDist <= active.guard : false;
+      // Falloff radius is 3× the tolerance so the cue keeps fading well past
+      // the snap zone — gives the user a "warmer / colder" hint while hunting.
+      const guardProximity = base
+        ? Math.max(0, 1 - guardDist / Math.max(active.guard * 3, 1e-4))
+        : 0;
 
       const knucklesFacing = !!base && rotDelta >= UPPERCUT_ROTATION_THRESH;
 
@@ -215,6 +221,7 @@ export function usePunchDetector(opts: {
         rotMet,
         velMet,
         inGuard,
+        guardProximity,
         knucklesFacing,
       };
     };

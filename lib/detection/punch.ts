@@ -42,6 +42,9 @@ export type HandMetrics = {
   rotMet: boolean;
   velMet: boolean;
   inGuard: boolean;
+  /** 0..1, how close the wrist is to the calibrated guard center.
+   *  1 = at center, 0 = beyond the proximity falloff radius (~3× tolerance). */
+  guardProximity: number;
   /** True when rotated ~90° from calibrated guard — knuckles facing camera. */
   knucklesFacing: boolean;
 };
@@ -58,6 +61,7 @@ export const EMPTY_METRICS: HandMetrics = {
   rotMet: false,
   velMet: false,
   inGuard: false,
+  guardProximity: 0,
   knucklesFacing: false,
 };
 
