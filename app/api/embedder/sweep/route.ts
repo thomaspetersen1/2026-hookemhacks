@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { serviceClient } from "@/lib/supabase/serviceClient";
 
 export const runtime = "nodejs";
 
@@ -9,10 +9,7 @@ export async function POST(req: Request) {
     return new Response("unauthorized", { status: 401 });
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = serviceClient();
 
   const { data, error } = await supabase
     .from("clips")

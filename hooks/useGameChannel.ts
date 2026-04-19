@@ -50,11 +50,13 @@ export function useGameChannel({
   const onGameEventRef = useRef(onGameEvent);
   const onPoseSnapshotRef = useRef(onPoseSnapshot);
 
-  useEffect(() => { onPlayerStateRef.current = onPlayerState; }, [onPlayerState]);
-  useEffect(() => { onAttackRef.current = onAttack; }, [onAttack]);
-  useEffect(() => { onHitRef.current = onHit; }, [onHit]);
-  useEffect(() => { onGameEventRef.current = onGameEvent; }, [onGameEvent]);
-  useEffect(() => { onPoseSnapshotRef.current = onPoseSnapshot; }, [onPoseSnapshot]);
+  useEffect(() => {
+    onPlayerStateRef.current = onPlayerState;
+    onAttackRef.current = onAttack;
+    onHitRef.current = onHit;
+    onGameEventRef.current = onGameEvent;
+    onPoseSnapshotRef.current = onPoseSnapshot;
+  });
 
   // Reconnect-on-peer-arrival bookkeeping. We keep kicking `reconnect()` on a
   // backoff schedule as long as a peer is in presence but hasn't sent a

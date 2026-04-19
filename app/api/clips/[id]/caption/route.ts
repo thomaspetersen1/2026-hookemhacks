@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { gemini, MODELS } from "@/lib/gemini";
+import { serviceClient } from "@/lib/supabase/serviceClient";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -9,10 +9,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: clipId } = await params;
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = serviceClient();
 
   const { data: existing } = await supabase
     .from("clips")

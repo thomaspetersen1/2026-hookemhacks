@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { createClient } from "@supabase/supabase-js";
 import { gemini, MODELS, EMBED_DIM, normalize } from "@/lib/gemini";
+import { serviceClient } from "@/lib/supabase/serviceClient";
 
 // ─── Plan schemas ─────────────────────────────────────────────────────────────
 
@@ -129,13 +129,6 @@ async function embedQuery(text: string): Promise<number[]> {
 }
 
 // ─── Dispatcher ───────────────────────────────────────────────────────────────
-
-function serviceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 export async function dispatch(plan: QueryPlan) {
   const supabase = serviceClient();

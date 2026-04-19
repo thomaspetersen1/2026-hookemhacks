@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
+import { serviceClient } from "@/lib/supabase/serviceClient";
 
 export const runtime = "nodejs";
 
@@ -11,13 +11,6 @@ interface ActionEvent {
   occurredAt: number;   // epoch ms
   matchTimeMs: number;
   metadata?: Record<string, unknown>;
-}
-
-function serviceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
 }
 
 export async function POST(req: NextRequest) {

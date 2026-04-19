@@ -57,14 +57,10 @@ export interface GameEvent {
   timestamp: number;
 }
 
-// Normalized (0..1) image-space landmark. Matches MediaPipe's NormalizedLandmark
-// but locally-defined so multiplayer types don't depend on the mediapipe package.
-export interface WireLandmark {
-  x: number;
-  y: number;
-  z: number;
-  visibility?: number;
-}
+// Normalized (0..1) image-space landmark. Shared shape with PoseLandmark —
+// aliased here so multiplayer code can keep the wire-format naming.
+import type { PoseLandmark } from "@/types";
+export type WireLandmark = PoseLandmark;
 
 // Pose indices carried in `arms` (MediaPipe landmark numbering):
 //   [0]=LEFT_SHOULDER(11) [1]=RIGHT_SHOULDER(12)

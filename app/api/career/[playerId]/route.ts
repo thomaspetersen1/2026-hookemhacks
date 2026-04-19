@@ -1,14 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
+import { serviceClient } from "@/lib/supabase/serviceClient";
 
 export const runtime = "nodejs";
-
-function serviceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
-}
 
 type RecordRow = {
   player_id: string;
