@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
+import { Billboard, Text } from "@react-three/drei";
 import * as THREE from "three";
 import type { Group } from "three";
 import type { HumanoidBoneName, PlayerId } from "@/types";
@@ -450,15 +451,18 @@ function NamePlate({ playerId, tint }: { playerId: PlayerId; tint: string }) {
   const player = useGameStore((s) => s.players.find((p) => p.id === playerId));
   if (!player) return null;
   return (
-    <mesh position={[0, 2.35, 0]}>
-      <planeGeometry args={[0.9, 0.22]} />
-      <meshBasicMaterial
-        color={player.isConnected ? tint : "#334155"}
-        transparent
-        opacity={player.isConnected ? 0.85 : 0.4}
-        toneMapped={false}
-      />
-    </mesh>
+    <Billboard position={[0, 2.35, 0]}>
+      <Text
+        fontSize={0.18}
+        color={player.isConnected ? tint : "#94a3b8"}
+        anchorX="center"
+        anchorY="middle"
+        outlineWidth={0.012}
+        outlineColor="#0f172a"
+      >
+        {player.displayName}
+      </Text>
+    </Billboard>
   );
 }
 
