@@ -56,16 +56,14 @@ export function useGameChannel({
   useEffect(() => { onGameEventRef.current = onGameEvent; }, [onGameEvent]);
   useEffect(() => { onPoseSnapshotRef.current = onPoseSnapshot; }, [onPoseSnapshot]);
 
-  // Reconnect-on-peer-arrival bookkeeping. We fire an initial `reconnect()`
-  // when a peer first appears (the "alone at subscribe" path leaves broadcast
-  // listeners wedged); then, if no broadcast arrives from the peer within 2s
-  // after that, we fire one more fallback reconnect. Caps at 2 attempts so
-  // we don't thrash forever in a genuinely dead room. Refs not state so flag
-  // flips don't cause re-renders.
-  const hasKickedRef = useRef(false);
-  const hasFallbackKickedRef = useRef(false);
+  // Reconnect-on-peer-arrival bookkeeping. We keep kicking `reconnect()` on a
+  // backoff schedule as long as a peer is in presence but hasn't sent a
+  // broadcast we can see — handles the "fast side subscribes, slow side takes
+  // 10s to boot" case where one-shot kicks all happen before the slow side
+  // is actually ready to respond. Caps at MAX_KICKS to avoid infinite churn.
+  const MAX_KICKS = 6;
+  const [kickAttempt, setKickAttempt] = useState(0);
   const lastPeerActivityRef = useRef(0);
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!roomId || !playerId) return;
@@ -74,11 +72,10 @@ export function useGameChannel({
     // channel can emit CHANNEL_ERROR as it's torn down mid-connect; `cancelled`
     // lets us ignore that noise and only react to the final channel.
     let cancelled = false;
-    hasKickedRef.current = false;
-    hasFallbackKickedRef.current = false;
     lastPeerActivityRef.current = 0;
     peerBroadcastSeenRef.current = false;
     setPeerBroadcastSeen(false);
+    setKickAttempt(0);
     const channel = new GameChannel(roomId, playerId, playerName);
     channelRef.current = channel;
 
@@ -114,53 +111,51 @@ export function useGameChannel({
 
     return () => {
       cancelled = true;
-      if (fallbackTimerRef.current) {
-        clearTimeout(fallbackTimerRef.current);
-        fallbackTimerRef.current = null;
-      }
       channel.unsubscribe();
       setConnected(false);
     };
   }, [roomId, playerId, playerName]);
 
-  // Auto-kick: when a peer first appears in presence, force a fresh subscribe.
-  // Delay is jittered per-client via a playerId hash so two sides don't both
-  // tear down at the same instant (which leaves both offline in the window
-  // and loses the handshake). Range 400-1200ms → ~800ms spread between any
-  // two clients, plenty to avoid simultaneous reconnect. After the first
-  // reconnect lands, we arm a fallback: if no broadcast from the peer arrives
-  // within 2s, kick once more — catches cases where the first kick raced.
+  // Persistent auto-kick loop. While `hasPeer && connected && !peerBroadcastSeen`,
+  // schedule a `reconnect()` and bump `kickAttempt`, which re-runs the effect
+  // after the reconnect lands. First kick uses a per-client jitter (derived
+  // from playerId) so two sides don't tear down at the same instant. Later
+  // kicks wait 2s to give the peer's slow boot time to catch up — crucial
+  // when one side is still initialising camera/MediaPipe and can't yet hit
+  // us with a broadcast. Stops as soon as we see *any* peer broadcast, or
+  // after MAX_KICKS attempts to avoid infinite churn on a dead room.
   useEffect(() => {
-    if (hasKickedRef.current || !connected) return;
+    if (!connected || peerBroadcastSeen) return;
     const hasPeer = players.some((p) => p.playerId !== playerId);
     if (!hasPeer) return;
-    hasKickedRef.current = true;
+    if (kickAttempt >= MAX_KICKS) return;
 
-    // Deterministic 400-1200ms jitter from playerId hash.
-    let h = 0;
-    for (let i = 0; i < playerId.length; i++) {
-      h = (h * 31 + playerId.charCodeAt(i)) & 0xffffffff;
+    let delay: number;
+    if (kickAttempt === 0) {
+      // Deterministic 400-1200ms jitter from playerId hash for the first kick
+      // so two clients with different ids don't collide.
+      let h = 0;
+      for (let i = 0; i < playerId.length; i++) {
+        h = (h * 31 + playerId.charCodeAt(i)) & 0xffffffff;
+      }
+      delay = 400 + (Math.abs(h) % 800);
+    } else {
+      // Subsequent kicks: 2s apart, plenty of breathing room for a slow
+      // peer to finish booting before we kick again.
+      delay = 2000;
     }
-    const delay = 400 + (Math.abs(h) % 800);
 
     const t = setTimeout(async () => {
-      const kickAt = Date.now();
+      if (kickAttempt > 0) {
+        console.log("[GC] retry kick", kickAttempt + 1, "— peer presence but no broadcast");
+      }
       await channelRef.current?.reconnect();
-      // Arm the fallback-kick. If we haven't heard anything from the peer
-      // 2s after the reconnect lands, try once more — same jitter avoids
-      // collision with the other side's own fallback.
-      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
-      fallbackTimerRef.current = setTimeout(() => {
-        fallbackTimerRef.current = null;
-        if (hasFallbackKickedRef.current) return;
-        if (lastPeerActivityRef.current > kickAt) return; // peer already active
-        hasFallbackKickedRef.current = true;
-        console.log("[GC] fallback reconnect (no peer activity after first kick)");
-        void channelRef.current?.reconnect();
-      }, 2000);
+      // Bump the attempt counter to re-run this effect. The guard at the
+      // top short-circuits if `peerBroadcastSeen` flipped during the kick.
+      setKickAttempt((n) => n + 1);
     }, delay);
     return () => clearTimeout(t);
-  }, [connected, players, playerId]);
+  }, [connected, players, playerId, peerBroadcastSeen, kickAttempt]);
 
   const broadcastPlayerState = useCallback(
     (state: Omit<PlayerState, "playerId" | "timestamp">) => {
