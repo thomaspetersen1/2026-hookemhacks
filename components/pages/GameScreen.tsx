@@ -42,6 +42,12 @@ type GameScreenProps = {
   ready?: boolean;
   /** Whether a peer is in presence; shapes the connecting-phase copy. */
   hasPeerPresence?: boolean;
+  /** Bumped on rematch to force IngestionBridge re-mount → new matches row. */
+  matchKey?: number;
+  /** True once outcome is locked; halts recorder + event flush. */
+  matchOver?: boolean;
+  /** Bubbled from IngestionBridge so the page can post winner on game over. */
+  onMatchIdChange?: (matchId: string | null) => void;
   /** Peer has broadcast guard_ready; gates waiting-peer → combat. */
   peerGuardReady?: boolean;
   /** Fires once when our local baseline lands; parent broadcasts guard_ready. */
@@ -54,6 +60,9 @@ export function GameScreen({
   playerId,
   ready = false,
   hasPeerPresence = false,
+  matchKey = 0,
+  matchOver = false,
+  onMatchIdChange,
   peerGuardReady = false,
   onSelfGuardReady,
 }: GameScreenProps) {
@@ -68,7 +77,14 @@ export function GameScreen({
     <BodyDetector debug={debug}>
       <CVRigBridge playerId={SELF_PLAYER_ID} />
       {roomId && playerId && (
-        <IngestionBridge roomId={roomId} playerId={playerId} combatStarted={combatStarted} />
+        <IngestionBridge
+          key={matchKey}
+          roomId={roomId}
+          playerId={playerId}
+          combatStarted={combatStarted}
+          frozen={matchOver}
+          onMatchIdChange={onMatchIdChange}
+        />
       )}
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={debugPanel} />

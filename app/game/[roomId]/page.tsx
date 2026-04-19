@@ -5,7 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Backdrop } from "@/components/scenery/Scenery";
 import { Calibration } from "@/components/pages/Calibration";
 import { GameScreen } from "@/components/pages/GameScreen";
-import { MatchOverOverlay } from "@/components/pages/MatchOverOverlay";
+import { Results } from "@/components/pages/Results";
 import { TWEAK_DEFAULTS } from "@/components/shared/constants";
 import { useGameChannel } from "@/hooks/useGameChannel";
 import { useIdentity } from "@/hooks/useIdentity";
@@ -31,6 +31,9 @@ export default function GamePage() {
   const [step, setStep] = useState<GameStep>("game");
   const [matchPct, setMatchPct] = useState(TWEAK_DEFAULTS.matchPct);
   const [leaving, setLeaving] = useState(false);
+  const [matchKey, setMatchKey] = useState(0);
+  const [activeMatchId, setActiveMatchId] = useState<string | null>(null);
+  const endedMatchesRef = useRef<Set<string>>(new Set());
   const setHostId = useGameStore((s) => s.setHostId);
   const setPlayerConnected = useGameStore((s) => s.setPlayerConnected);
   const setPlayerName = useGameStore((s) => s.setPlayerName);
@@ -51,6 +54,13 @@ export default function GamePage() {
   // re-broadcast when a peer joins presence after we're already locked in
   // (covers refresh/reconnect cases).
   const selfGuardReadyRef = useRef(false);
+
+  // Fresh match on page mount — clear any stale HP / outcome from a previous
+  // match so the HP→outcome effect below doesn't instantly flash Results when
+  // the user re-enters a game room after returning to the lobby.
+  useEffect(() => {
+    useGameStore.getState().reset();
+  }, []);
 
   useEffect(() => {
     if (!code) return;
@@ -77,6 +87,8 @@ export default function GamePage() {
         useGameStore.getState().reset();
         useCalibrationSignalStore.getState().requestRecalibrate();
         setOutcome(null);
+        // Remount IngestionBridge → new matches row for this rematch.
+        setMatchKey((k) => k + 1);
         // Rearm the guard-ready gate for round N+1. Without this, both sides
         // enter rematch with peerGuardReady=true carried over from round N,
         // and the waiting-peer phase dismisses instantly — sync lost.
@@ -89,6 +101,11 @@ export default function GamePage() {
       }
     },
     onHit: (hit) => {
+      // Freeze after KO: drop any in-flight hits rather than trying to land
+      // them on a player who's already at 0. Mirrors the gate in
+      // PunchCollisionDetector so both sides stop together.
+      const players = useGameStore.getState().players;
+      if (players.some((p) => p.hp <= 0)) return;
       // Peer says they hit REMOTE_PLAYER_ID (us). Remap to our local perspective:
       // their "remote" = our "self", and vice versa.
       const localTargetId = hit.targetId === REMOTE_PLAYER_ID ? SELF_PLAYER_ID : REMOTE_PLAYER_ID;
@@ -193,26 +210,56 @@ export default function GamePage() {
     if (peer?.tint) setPlayerTint(REMOTE_PLAYER_ID, peer.tint);
   }, [players, playerId, setPlayerTint]);
 
-
-  // Lock in the winner the first time either HP reaches 0. Held until a
-  // rematch event resets it so later store changes can't flip the outcome.
-  useEffect(() => {
-    if (outcome) return;
-    if (remoteHp <= 0) setOutcome("self");
-    else if (selfHp <= 0) setOutcome("remote");
-  }, [selfHp, remoteHp, outcome]);
-
   const remotePeer = players.find((p) => p.playerId !== playerId);
   const winnerName =
     outcome === "self"
       ? playerName || "You"
       : remotePeer?.name || "Opponent";
+  const loserName =
+    outcome === "self"
+      ? remotePeer?.name || "Opponent"
+      : playerName || "You";
+
+  // When HP hits 0: lock the outcome. Only the winning side POSTs — it's the
+  // only side that reliably knows its own playerId without depending on peer
+  // presence (which can be missing at KO if channel presence just dropped).
+  // We pass the peer's playerId as a hint when presence is available; the
+  // server falls through to match_events / room_players otherwise.
+  // endedMatchesRef keyed on activeMatchId prevents duplicate POSTs.
+  useEffect(() => {
+    if (selfHp > 0 && remoteHp > 0) return;
+    const selfWon = remoteHp <= 0;
+    setOutcome(selfWon ? "self" : "remote");
+    if (!selfWon) return;
+    if (!activeMatchId || !playerId) return;
+    if (endedMatchesRef.current.has(activeMatchId)) return;
+    endedMatchesRef.current.add(activeMatchId);
+    const peer = players.find((p) => p.playerId !== playerId);
+    const body: { matchId: string; winnerId: string; loserId?: string } = {
+      matchId: activeMatchId,
+      winnerId: playerId,
+    };
+    if (peer?.playerId) body.loserId = peer.playerId;
+    fetch("/api/matches/end", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).catch(() => {
+      endedMatchesRef.current.delete(activeMatchId);
+    });
+  }, [selfHp, remoteHp, activeMatchId, playerId, players]);
+
+  const onMatchIdChange = useCallback((id: string | null) => {
+    setActiveMatchId(id);
+  }, []);
 
   const onPlayAgain = useCallback(() => {
     useGameStore.getState().reset();
     useCalibrationSignalStore.getState().requestRecalibrate();
     broadcastGameEvent({ type: "rematch", payload: {} });
     setOutcome(null);
+    // Mirrors the remote-side handler so the host also rolls a new match row.
+    setMatchKey((k) => k + 1);
     // Rearm the guard-ready gate locally (peer side rearms in its rematch
     // handler). Overlay resets via its own recalTick effect.
     setPeerGuardReady(false);
@@ -244,6 +291,10 @@ export default function GamePage() {
   const returnToLobby = async (reason: string) => {
     if (leaving) return;
     setLeaving(true);
+    // Clear local game state so re-entering a room doesn't flash Results on
+    // mount (HP would still be 0 from the previous match otherwise).
+    useGameStore.getState().reset();
+    setOutcome(null);
     broadcastGameEvent({ type: "game_end", payload: { reason } });
     if (roomUuid) {
       try {
@@ -282,17 +333,23 @@ export default function GamePage() {
           playerId={playerId || undefined}
           ready={ready}
           hasPeerPresence={hasPeerPresence}
+          matchKey={matchKey}
+          matchOver={outcome !== null}
+          onMatchIdChange={onMatchIdChange}
           peerGuardReady={peerGuardReady}
           onSelfGuardReady={handleSelfGuardReady}
         />
       )}
 
-      <MatchOverOverlay
-        visible={outcome !== null}
-        winnerName={winnerName}
-        selfWon={outcome === "self"}
-        onPlayAgain={onPlayAgain}
-      />
+      {outcome !== null && (
+        <Results
+          winnerName={winnerName}
+          loserName={loserName}
+          selfWon={outcome === "self"}
+          onPlayAgain={onPlayAgain}
+          onBackToLobby={() => returnToLobby("match_complete")}
+        />
+      )}
 
       <style>{`
         .leave-match-btn {

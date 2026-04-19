@@ -12,11 +12,15 @@ export interface IngestionOptions {
   /** Gate the match-start effect. Defaults true; pass false to defer creation
    *  of the matches row (and therefore recording) until e.g. combat begins. */
   enabled?: boolean;
+  /** When true, stop the recorder and the event-flush interval but keep the
+   *  matches row open. Used to halt ingestion at KO without triggering the
+   *  match-start cleanup (which would race with the winner POST). */
+  frozen?: boolean;
   drainEvents?: () => ActionEvent[];
   getChunkRollup?: () => Record<string, number>;
 }
 
-export function useIngestion({ roomId, playerId, stream, enabled = true, drainEvents, getChunkRollup }: IngestionOptions) {
+export function useIngestion({ roomId, playerId, stream, enabled = true, frozen = false, drainEvents, getChunkRollup }: IngestionOptions) {
   const [matchId, setMatchId] = useState<string | null>(null);
   // Keep matchId in a ref so callbacks always see the latest value without
   // needing to be re-created when the state updates.
@@ -96,19 +100,20 @@ export function useIngestion({ roomId, playerId, stream, enabled = true, drainEv
     handleChunk
   );
 
-  // Start recording once both matchId and stream are available.
+  // Start recording once both matchId and stream are available. Re-runs when
+  // `frozen` flips, stopping the recorder mid-match at KO.
   useEffect(() => {
-    if (!matchId || !stream) return;
+    if (!matchId || !stream || frozen) return;
     startRecorder(matchId, playerId);
     return () => {
       stopRecorder();
     };
-  }, [matchId, stream, playerId, startRecorder, stopRecorder]);
+  }, [matchId, stream, playerId, frozen, startRecorder, stopRecorder]);
 
   // Flush queued ActionEvents every 2.5 seconds.
   // No-ops until drainEvents is wired to an EventTracker (Phase 1).
   useEffect(() => {
-    if (!matchId) return;
+    if (!matchId || frozen) return;
 
     const id = setInterval(async () => {
       const events = drainEvents?.() ?? [];
@@ -126,7 +131,7 @@ export function useIngestion({ roomId, playerId, stream, enabled = true, drainEv
     }, 2_500);
 
     return () => clearInterval(id);
-  }, [matchId, playerId, drainEvents]);
+  }, [matchId, playerId, frozen, drainEvents]);
 
   return { matchId, recorderState };
 }

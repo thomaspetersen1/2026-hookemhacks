@@ -1,160 +1,244 @@
 "use client";
 
 import { BRAND } from "../shared/constants";
-import type { ScoreLevel } from "../shared/types";
-
-const RESULT_PLAYERS = [
-  { name: "You",         tag: "P1", you: true  as const, delta: "+2", deltaUp: true  as const },
-  { name: "Mango Molly", tag: "P2", you: false as const, delta: "-1", deltaUp: false as const },
-  { name: "Coral Kai",   tag: "P3", you: false as const, delta: "+0", deltaUp: true  as const },
-  { name: "Lavafoot",    tag: "P4", you: false as const, delta: "-1", deltaUp: false as const },
-  { name: "Reef Rae",    tag: "P5", you: false as const, delta: "+1", deltaUp: true  as const },
-  { name: "Sunny Steve", tag: "P6", you: false as const, delta: "-1", deltaUp: false as const },
-  { name: "Palm Pete",   tag: "P7", you: false as const, delta: "+0", deltaUp: true  as const },
-  { name: "Tiki Tomi",   tag: "P8", you: false as const, delta: "+0", deltaUp: true  as const },
-] as const;
-
-const RESULT_COLORS = [
-  "#FF6B4A",
-  "#2BB3C0",
-  "#2E7D5B",
-  "#FF5E7E",
-  "#FFD24A",
-  "#8A5EE0",
-  "#4A90E2",
-  "#E06B4A",
-];
 
 type ResultsProps = {
+  winnerName: string;
+  loserName: string;
+  selfWon: boolean;
   onPlayAgain: () => void;
   onBackToLobby: () => void;
-  playerCount?: number;
-  scoreLevel?: ScoreLevel;
 };
 
-export function Results({ onPlayAgain, onBackToLobby, playerCount = 4, scoreLevel = "mid" }: ResultsProps) {
-  const scoreMult = scoreLevel === "blowout" ? 1.8 : scoreLevel === "low" ? 0.35 : 1;
-  const baseScores = [3240, 2980, 2740, 2380, 2010, 1690, 1420, 1080];
-  const players = RESULT_PLAYERS.slice(0, playerCount).map((p, i) => ({
-    ...p,
-    color: RESULT_COLORS[i % RESULT_COLORS.length],
-    score: Math.round(baseScores[i] * scoreMult),
-  }));
+const WINNER_COLOR = "#FFD24A";
+const LOSER_COLOR = "#2BB3C0";
 
-  const top3 = players.slice(0, 3);
-  const winner = top3[0];
+export function Results({
+  winnerName,
+  loserName,
+  selfWon,
+  onPlayAgain,
+  onBackToLobby,
+}: ResultsProps) {
+  const heroWord = selfWon ? "VICTORY." : "SUNSET.";
 
   return (
-    <div className="results-wrap">
+    <div className="results-wrap" role="status" aria-live="polite">
+      <div className="results-bg" />
       <div className="results-card card">
         <div className="results-hero">
           <div className="results-eyebrow">
             Match complete · {BRAND.gameName}
           </div>
-          <h1 className="results-title">SUNSET.</h1>
+          <h1 className="results-title">{heroWord}</h1>
           <div className="results-winner">
-            🏆 {winner.name} took the cove with {winner.score.toLocaleString()} pts
+            🏆 {winnerName} took the cove
           </div>
         </div>
 
         <div className="results-body">
-          <div className="podium">
-            {top3[1] && (
-              <div className="podium-slot p2">
-                <div className="avatar" style={{ background: top3[1].color }}>
-                  {top3[1].name[0]}
-                </div>
-                <div className="name">{top3[1].name}</div>
-                <div className="score">{top3[1].score.toLocaleString()}</div>
-                <div className="bar">2</div>
+          <div className="duo">
+            <div className="duo-slot winner">
+              <div className="tag">WINNER</div>
+              <div
+                className="avatar"
+                style={{ background: WINNER_COLOR }}
+                aria-hidden
+              >
+                {winnerName[0]?.toUpperCase() ?? "?"}
               </div>
-            )}
-            {top3[0] && (
-              <div className="podium-slot p1">
-                <div
-                  className="avatar"
-                  style={{ background: top3[0].color, width: 72, height: 72, fontSize: 28 }}
-                >
-                  {top3[0].name[0]}
-                </div>
-                <div className="name" style={{ fontSize: 16 }}>
-                  {top3[0].name}
-                </div>
-                <div className="score" style={{ fontSize: 24 }}>
-                  {top3[0].score.toLocaleString()}
-                </div>
-                <div className="bar">1</div>
+              <div className="name">{winnerName}</div>
+              <div className="sub mono">wins the round</div>
+            </div>
+            <div className="vs mono">VS</div>
+            <div className="duo-slot loser">
+              <div className="tag">KO</div>
+              <div
+                className="avatar"
+                style={{ background: LOSER_COLOR }}
+                aria-hidden
+              >
+                {loserName[0]?.toUpperCase() ?? "?"}
               </div>
-            )}
-            {top3[2] && (
-              <div className="podium-slot p3">
-                <div className="avatar" style={{ background: top3[2].color }}>
-                  {top3[2].name[0]}
-                </div>
-                <div className="name">{top3[2].name}</div>
-                <div className="score">{top3[2].score.toLocaleString()}</div>
-                <div className="bar">3</div>
-              </div>
-            )}
-          </div>
-
-          <div className="results-stats">
-            <div className="rs-tile">
-              <div className="lbl">Your rank</div>
-              <div className="val">#{players.findIndex((p) => p.you) + 1}</div>
-              <div className="sub">of {playerCount} players</div>
+              <div className="name">{loserName}</div>
+              <div className="sub mono">next time</div>
             </div>
-            <div className="rs-tile">
-              <div className="lbl">Best combo</div>
-              <div className="val">×18</div>
-              <div className="sub">+540 bonus</div>
-            </div>
-            <div className="rs-tile">
-              <div className="lbl">Calories</div>
-              <div className="val">142</div>
-              <div className="sub">well-earned smoothie</div>
-            </div>
-            <div className="rs-tile">
-              <div className="lbl">Accuracy</div>
-              <div className="val">87%</div>
-              <div className="sub">joints tracked</div>
-            </div>
-          </div>
-
-          <div className="full-rank">
-            {players.map((p, i) => (
-              <div key={p.tag} className={`rank-row ${p.you ? "you" : ""}`}>
-                <div className="rank">#{i + 1}</div>
-                <div className="avatar" style={{ background: p.color, width: 36, height: 36, fontSize: 15 }}>
-                  {p.name[0]}
-                </div>
-                <div className="nm">
-                  {p.name}
-                  {p.you && (
-                    <span className="mono you-tag">YOU</span>
-                  )}
-                </div>
-                <div className={`delta ${p.deltaUp ? "" : "down"}`}>
-                  {p.deltaUp ? "▲" : "▼"} {p.delta}
-                </div>
-                <div className="pts">{p.score.toLocaleString()}</div>
-              </div>
-            ))}
           </div>
 
           <div className="results-actions">
-            <button type="button" className="btn ghost" style={{ flex: "0 0 auto" }} onClick={onBackToLobby}>
+            <button
+              type="button"
+              className="btn ghost"
+              style={{ flex: "0 0 auto" }}
+              onClick={onBackToLobby}
+            >
               ← Back to lobby
             </button>
-            <button type="button" className="btn primary" style={{ flex: 1 }} onClick={onPlayAgain}>
+            <button
+              type="button"
+              className="btn primary"
+              style={{ flex: 1 }}
+              onClick={onPlayAgain}
+            >
               🌋 Rematch
-            </button>
-            <button type="button" className="btn dark" style={{ flex: "0 0 auto" }}>
-              Share clip
             </button>
           </div>
         </div>
       </div>
+
+      <style>{`
+        .results-wrap {
+          position: fixed;
+          inset: 0;
+          z-index: 10002;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 28px 24px;
+          pointer-events: none;
+          animation: results-fade 240ms ease-out both;
+        }
+        .results-bg {
+          position: fixed;
+          inset: 0;
+          z-index: -1;
+          background: color-mix(in srgb, black 55%, transparent);
+        }
+        .results-card {
+          pointer-events: auto;
+          background: white;
+          border: 3px solid var(--sun);
+          border-radius: var(--radius-lg);
+          box-shadow:
+            0 0 0 6px color-mix(in srgb, var(--sun) 22%, transparent),
+            var(--shadow-chunky);
+          padding: 28px 32px 24px;
+          width: min(520px, 92vw);
+          max-height: calc(100dvh - 56px);
+          overflow-y: auto;
+          color: var(--ink);
+          animation: results-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+        }
+        .results-hero {
+          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 4px;
+        }
+        .results-eyebrow {
+          font-family: var(--font-outfit), sans-serif;
+          font-size: 12px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ink);
+        }
+        .results-title {
+          font-family: var(--font-outfit), sans-serif;
+          font-size: clamp(36px, 7vw, 56px);
+          font-weight: 800;
+          line-height: 1;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
+          color: var(--sun);
+          margin: 6px 0 8px;
+          text-shadow:
+            0 3px 0 rgba(58, 46, 76, 0.18),
+            0 8px 22px color-mix(in srgb, var(--sun) 30%, transparent);
+        }
+        .results-winner {
+          font-family: var(--font-outfit), sans-serif;
+          font-size: clamp(14px, 2.2vw, 16px);
+          font-weight: 600;
+          color: var(--ink);
+          word-break: break-word;
+          margin-bottom: 8px;
+        }
+        .results-body {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          margin-top: 12px;
+        }
+        .duo {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 16px;
+        }
+        .duo-slot {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          padding: 16px 12px;
+          border-radius: var(--radius);
+          background: color-mix(in srgb, var(--sun) 6%, white);
+          border: 2px solid color-mix(in srgb, var(--sun) 24%, transparent);
+        }
+        .duo-slot.loser {
+          background: color-mix(in srgb, var(--ink) 4%, white);
+          border-color: color-mix(in srgb, var(--ink) 12%, transparent);
+          opacity: 0.92;
+        }
+        .duo-slot .tag {
+          font-family: var(--font-jetbrains-mono), monospace;
+          font-size: 10px;
+          font-weight: 600;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+        }
+        .duo-slot.winner .tag { color: var(--sun); }
+        .duo-slot .avatar {
+          width: 56px;
+          height: 56px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-family: var(--font-outfit), sans-serif;
+          font-size: 22px;
+          font-weight: 800;
+          color: white;
+          box-shadow: var(--shadow-chunky);
+        }
+        .duo-slot .name {
+          font-family: var(--font-outfit), sans-serif;
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--ink);
+          text-align: center;
+          word-break: break-word;
+        }
+        .duo-slot .sub {
+          font-size: 10px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--ink-soft);
+        }
+        .vs {
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: 0.12em;
+          color: var(--ink-soft);
+        }
+        .results-actions {
+          display: flex;
+          gap: 10px;
+          align-items: stretch;
+        }
+        @keyframes results-fade {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes results-pop {
+          0%   { transform: scale(0.4) rotate(-4deg); opacity: 0; }
+          60%  { transform: scale(1.04) rotate(1.5deg); opacity: 1; }
+          100% { transform: scale(1)    rotate(0);     opacity: 1; }
+        }
+      `}</style>
     </div>
   );
 }
