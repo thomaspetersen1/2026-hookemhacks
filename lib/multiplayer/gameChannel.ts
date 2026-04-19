@@ -40,9 +40,13 @@ export class GameChannel {
 
   // Reconnect bookkeeping. `handlers` is captured on the first subscribe() call
   // and reused when we have to rebuild the channel after a drop. `destroyed`
-  // flips on unsubscribe() so we stop retrying after a real teardown.
+  // flips on unsubscribe() so we stop retrying after a real teardown. The
+  // `stableTimer` defers reset of `retryAttempt` until the channel has been
+  // SUBSCRIBED for a few seconds — without this, a SUBSCRIBED→CLOSED
+  // oscillation keeps the counter at 0 and pins the retry at the min delay.
   private handlers: SubscribeHandlers | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private stableTimer: ReturnType<typeof setTimeout> | null = null;
   private retryAttempt = 0;
   private destroyed = false;
 
@@ -165,13 +169,25 @@ export class GameChannel {
         console.log("[GC] status", status, err ?? "");
         if (status === "SUBSCRIBED") {
           this.ready = false;
-          this.retryAttempt = 0;
           await this.trackPresence();
+          // Defer the retry-counter reset: only clear it after the channel
+          // has been SUBSCRIBED continuously for 5s. This keeps the backoff
+          // climbing during SUBSCRIBED→CLOSED oscillation (which otherwise
+          // resets to attempt 1 every cycle and hammers at the min delay).
+          if (this.stableTimer) clearTimeout(this.stableTimer);
+          this.stableTimer = setTimeout(() => {
+            this.retryAttempt = 0;
+            this.stableTimer = null;
+          }, 5000);
           if (!settled) {
             settled = true;
             resolve();
           }
         } else if (status === "CHANNEL_ERROR" || status === "CLOSED" || status === "TIMED_OUT") {
+          if (this.stableTimer) {
+            clearTimeout(this.stableTimer);
+            this.stableTimer = null;
+          }
           if (this.destroyed) return;
           this.scheduleReconnect();
           if (!settled) {
@@ -196,6 +212,17 @@ export class GameChannel {
       if (this.destroyed) return;
       // removeChannel is safe on an already-dead channel; it just no-ops.
       supabase.removeChannel(this.channel);
+      // Kick the underlying realtime socket. If the whole transport is
+      // down (not just our channel), new channels will keep CHANNEL_ERROR'ing
+      // until the socket itself is reopened — the SDK's auto-reconnect
+      // sometimes stalls, so we nudge it. connect() is a no-op when the
+      // socket is already open, so this is safe to call unconditionally.
+      try {
+        supabase.realtime.connect();
+      } catch {
+        // connect throws if socket is mid-transition — harmless, the next
+        // retry attempt will try again.
+      }
       this.channel = this.createChannel();
       this.bindHandlers();
       // Any further status errors here are handled inside startSubscribe —
@@ -285,6 +312,10 @@ export class GameChannel {
     if (this.retryTimer) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
+    }
+    if (this.stableTimer) {
+      clearTimeout(this.stableTimer);
+      this.stableTimer = null;
     }
     supabase.removeChannel(this.channel);
   }
