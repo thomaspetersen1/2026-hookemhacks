@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Backdrop } from "@/components/scenery/Scenery";
 import { Calibration } from "@/components/pages/Calibration";
 import { GameScreen } from "@/components/pages/GameScreen";
+import { MatchOverOverlay } from "@/components/pages/MatchOverOverlay";
 import { TWEAK_DEFAULTS } from "@/components/shared/constants";
 import { useGameChannel } from "@/hooks/useGameChannel";
 import { useIdentity } from "@/hooks/useIdentity";
@@ -30,6 +31,14 @@ export default function GamePage() {
   const [leaving, setLeaving] = useState(false);
   const setHostId = useGameStore((s) => s.setHostId);
   const setPlayerConnected = useGameStore((s) => s.setPlayerConnected);
+  const setPlayerName = useGameStore((s) => s.setPlayerName);
+  const selfHp = useGameStore(
+    (s) => s.players.find((p) => p.id === SELF_PLAYER_ID)?.hp ?? 100,
+  );
+  const remoteHp = useGameStore(
+    (s) => s.players.find((p) => p.id === REMOTE_PLAYER_ID)?.hp ?? 100,
+  );
+  const [outcome, setOutcome] = useState<"self" | "remote" | null>(null);
 
   useEffect(() => {
     if (!code) return;
@@ -52,6 +61,10 @@ export default function GamePage() {
     playerName: playerName || playerId,
     onGameEvent: (e) => {
       if (e.type === "game_end") router.push(`/lobby/${code}`);
+      else if (e.type === "rematch") {
+        useGameStore.getState().reset();
+        setOutcome(null);
+      }
     },
     onHit: (hit) => {
       // Peer says they hit REMOTE_PLAYER_ID (us). Remap to our local perspective:
@@ -125,6 +138,35 @@ export default function GamePage() {
   useEffect(() => {
     setPlayerConnected(REMOTE_PLAYER_ID, hasPeerPresence);
   }, [hasPeerPresence, setPlayerConnected]);
+
+  useEffect(() => {
+    if (playerName) setPlayerName(SELF_PLAYER_ID, playerName);
+  }, [playerName, setPlayerName]);
+
+  useEffect(() => {
+    const peer = players.find((p) => p.playerId !== playerId);
+    if (peer?.name) setPlayerName(REMOTE_PLAYER_ID, peer.name);
+  }, [players, playerId, setPlayerName]);
+
+  // Lock in the winner the first time either HP reaches 0. Held until a
+  // rematch event resets it so later store changes can't flip the outcome.
+  useEffect(() => {
+    if (outcome) return;
+    if (remoteHp <= 0) setOutcome("self");
+    else if (selfHp <= 0) setOutcome("remote");
+  }, [selfHp, remoteHp, outcome]);
+
+  const remotePeer = players.find((p) => p.playerId !== playerId);
+  const winnerName =
+    outcome === "self"
+      ? playerName || "You"
+      : remotePeer?.name || "Opponent";
+
+  const onPlayAgain = useCallback(() => {
+    useGameStore.getState().reset();
+    broadcastGameEvent({ type: "rematch", payload: {} });
+    setOutcome(null);
+  }, [broadcastGameEvent]);
   const ready =
     peerBroadcastSeen ||
     (connected && (soloTimedOut || presenceTimedOut));
@@ -172,6 +214,13 @@ export default function GamePage() {
           hasPeerPresence={hasPeerPresence}
         />
       )}
+
+      <MatchOverOverlay
+        visible={outcome !== null}
+        winnerName={winnerName}
+        selfWon={outcome === "self"}
+        onPlayAgain={onPlayAgain}
+      />
 
       <style>{`
         .leave-match-btn {

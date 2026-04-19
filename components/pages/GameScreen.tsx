@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import BodyDetector from "@/components/detection/BodyDetector";
 import { CVRigBridge } from "@/components/detection/CVRigBridge";
 import { IngestionBridge } from "@/components/detection/IngestionBridge";
-import { DropBallButton } from "@/components/game/DropBallButton";
 import { HPBars } from "@/components/game/HPBars";
 import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel";
 import { GameLoadingOverlay } from "@/components/pages/GameLoadingOverlay";
@@ -62,7 +61,6 @@ export function GameScreen({
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={debugPanel} />
         <HPBars />
-        <DropBallButton />
         <PunchDebugLayer
           debugPanel={debugPanel}
           onToggleDebug={() => setDebugPanel((v) => !v)}

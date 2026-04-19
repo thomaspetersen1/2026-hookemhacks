@@ -8,7 +8,6 @@ import dynamic from "next/dynamic";
 import BodyDetector from "@/components/detection/BodyDetector";
 import { CVRigBridge } from "@/components/detection/CVRigBridge";
 import { ArmRigSim } from "@/components/game/ArmRigSim";
-import { DropBallButton } from "@/components/game/DropBallButton";
 import { HPBars } from "@/components/game/HPBars";
 import { CalibrateGuardPanel } from "@/components/detection/CalibrateGuardPanel";
 import { usePunchDetector } from "@/hooks/usePunchDetector";
@@ -44,7 +43,6 @@ export default function WorldPage() {
       <div className="relative h-screen w-screen overflow-hidden bg-black">
         <GameCanvas debug={debugPanel} />
         <HPBars />
-        <DropBallButton />
         <ArmRigSim />
         <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 font-mono text-[10px] uppercase tracking-[0.3em] text-zinc-500">
           world · CV driven{debug ? " · feed bottom-right" : ""}
