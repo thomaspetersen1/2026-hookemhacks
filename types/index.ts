@@ -204,6 +204,12 @@ export interface BodyTrackingState {
    */
   leftHandLandmarks: PoseLandmark[] | null;
   rightHandLandmarks: PoseLandmark[] | null;
+  /**
+   * Raw 33-landmark MediaPipe pose output for the detected person. `null`
+   * when no pose is detected on this frame. Exposed so consumers can draw
+   * custom skeleton overlays (e.g. arms-only) without re-running the model.
+   */
+  poseLandmarks: PoseLandmark[] | null;
   fps: number;
   isReady: boolean;
 }

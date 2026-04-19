@@ -100,6 +100,7 @@ const defaultState: BodyTrackingContextValue = {
   rightHand: null,
   leftHandLandmarks: null,
   rightHandLandmarks: null,
+  poseLandmarks: null,
   fps: 0,
   isReady: false,
   videoRef: null,
@@ -193,6 +194,7 @@ export function useBodyDetectionProvider(
       rightHand: raw.rightHandLandmarks ? buildHandState(raw.rightHandLandmarks) : null,
       leftHandLandmarks: raw.leftHandLandmarks,
       rightHandLandmarks: raw.rightHandLandmarks,
+      poseLandmarks: raw.poseLandmarks.length > 0 ? raw.poseLandmarks[0] : null,
       fps: fps ?? prev.fps,
       isReady: true,
     }));
